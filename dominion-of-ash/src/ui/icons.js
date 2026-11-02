@@ -1,0 +1,34 @@
+// Inline SVG icons (stroke-based, currentColor).
+const P = {
+  sword: '<path d="M14.5 3.5 20.5 3.5 20.5 9.5 9 21 3 15Z"/><path d="M5 13l6 6M3 21l3-3"/>',
+  axe: '<path d="M6 21 17 6"/><path d="M13 3c4 0 8 4 8 8-3 0-5-1-7-3s-2-3-1-5Z"/>',
+  bow: '<path d="M5 3c8 3 13 8 16 16"/><path d="M5 3 21 19"/><path d="M3 21l7-7"/>',
+  flame: '<path d="M12 22c-4 0-7-3-7-7 0-5 5-6 5-12 3 2 9 6 9 12 0 4-3 7-7 7Z"/><path d="M12 22c-2 0-3-2-3-3.5 0-2 3-3 3-5 1.5 1 3 2.5 3 5 0 1.5-1 3.5-3 3.5Z"/>',
+  dagger: '<path d="M12 2l2.5 11h-5Z"/><path d="M7.5 13h9M12 13v6M10 21h4"/>',
+  crown: '<path d="M3 18 5 7l5 5 2-7 2 7 5-5 2 11Z"/><path d="M3 21h18"/>',
+  shield: '<path d="M12 21c5-2 8-6 8-12V5l-8-3-8 3v4c0 6 3 10 8 12Z"/>',
+  skull: '<path d="M5 11a7 7 0 0 1 14 0c0 3-2 4-2 6H7c0-2-2-3-2-6Z"/><circle cx="9" cy="11" r="1.6"/><circle cx="15" cy="11" r="1.6"/><path d="M9 20v-3M12 20v-3M15 20v-3"/>',
+  banner: '<path d="M5 22V3"/><path d="M5 4h13l-3 4 3 4H5"/>',
+  pause: '<path d="M8 5v14M16 5v14"/>',
+  play: '<path d="M7 4l13 8-13 8Z"/>',
+  fast: '<path d="M3 5l9 7-9 7Z"/><path d="M12 5l9 7-9 7Z"/>',
+  slow: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/>',
+  march: '<path d="M4 12h14M13 6l6 6-6 6"/>',
+  charge: '<path d="M3 12h10M9 6l6 6-6 6"/><path d="M15 6l6 6-6 6"/>',
+  stop: '<rect x="6" y="6" width="12" height="12" rx="1"/>',
+  all: '<circle cx="7" cy="8" r="3"/><circle cx="17" cy="8" r="3"/><circle cx="12" cy="16" r="3"/>',
+  eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+  book: '<path d="M4 4h7a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4Z"/><path d="M20 4h-7a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h7Z"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>',
+  coin: '<circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10h4a1.5 1.5 0 0 1 0 3h-3a1.5 1.5 0 0 0 0 3h4"/>',
+  back: '<path d="M15 5l-7 7 7 7"/>',
+  map: '<path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3Z"/><path d="M9 3v15M15 6v15"/>',
+  swords: '<path d="M4 4l10 10M20 4 10 14"/><path d="M6 14l4 4M18 14l-4 4M3 21l3-3M21 21l-3-3"/>',
+  hourglass: '<path d="M6 2h12M6 22h12M7 2c0 6 10 8 10 10S7 16 7 22M17 2c0 6-10 8-10 10s10 4 10 10"/>',
+  star: '<path d="M12 2l3 7 7 .6-5.4 4.6L18.5 22 12 18l-6.5 4 1.9-7.8L2 9.6 9 9Z"/>',
+  flag: '<path d="M5 22V3M5 4h12l-2 4 2 4H5"/>',
+  sound: '<path d="M4 9h4l5-4v14l-5-4H4Z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/>',
+};
+export const icon = (name, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || ''}</svg>`;
+export const ROLE_ICON = { melee: 'sword', ranged: 'bow', caster: 'flame', flanker: 'dagger', swarm: 'skull', hero: 'crown' };
+export const UNIT_ICON = { knight: 'shield', barbarian: 'axe', ranger: 'bow', pyromancer: 'flame', shade: 'dagger', commander: 'crown', bonewarden: 'shield', thrall: 'skull', boneshot: 'bow', necromancer: 'skull', ashking: 'crown' };

@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       game:
-        description: Game folder to build
+        description: Game to build
         type: choice
-        options: [pocket-ecosystem]
-        default: pocket-ecosystem
+        options: [all, pocket-ecosystem, dominion-of-ash, crown-of-thorns]
+        default: all
       signed:
         description: Sign with the certificate in repo secrets (needs IOS_* secrets)
         type: boolean
@@ -16,37 +16,67 @@ on:
     branches: [main]
     paths:
       - 'pocket-ecosystem/**'
+      - 'dominion-of-ash/**'
+      - 'crown-of-thorns/**'
+      - 'shared-assets/**'
       - '.github/workflows/build-ios.yml'
 
 concurrency:
-  group: ios-${{ github.ref }}-${{ inputs.game || 'pocket-ecosystem' }}
+  group: ios-${{ github.ref }}-${{ inputs.game || 'push' }}
   cancel-in-progress: true
 
 jobs:
-  test:
+  plan:
     runs-on: ubuntu-latest
-    defaults: { run: { working-directory: '${{ inputs.game || ''pocket-ecosystem'' }}' } }
+    outputs:
+      games: ${{ steps.pick.outputs.games }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - id: pick
+        env:
+          INPUT: ${{ inputs.game }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          ALL=$(ls -d */ | tr -d / | while read d; do [ -d "$d/ios" ] && echo "$d"; done)
+          if [ -n "$INPUT" ] && [ "$INPUT" != "all" ]; then SEL="$INPUT"
+          elif [ -n "$INPUT" ]; then SEL="$ALL"
+          else
+            CHANGED=$(git diff --name-only "$BEFORE" "$GITHUB_SHA" 2>/dev/null || echo ALL)
+            if echo "$CHANGED" | grep -qE '^(ALL|shared-assets/|\.github/)'; then SEL="$ALL"
+            else SEL=$(for d in $ALL; do echo "$CHANGED" | grep -q "^$d/" && echo "$d"; done); fi
+          fi
+          JSON=$(printf '%s\n' $SEL | grep -v '^$' | jq -R . | jq -cs .)
+          echo "games=$JSON" >> "$GITHUB_OUTPUT"; echo "Building: $JSON"
+
+  test:
+    needs: plan
+    if: needs.plan.outputs.games != '[]'
+    strategy: { fail-fast: false, matrix: { game: '${{ fromJSON(needs.plan.outputs.games) }}' } }
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: '${{ matrix.game }}' } }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm, cache-dependency-path: '${{ inputs.game || ''pocket-ecosystem'' }}/package-lock.json' }
+        with: { node-version: 22, cache: npm, cache-dependency-path: '${{ matrix.game }}/package-lock.json' }
       - run: npm ci
-      - name: Playtest every level with the gardener bot
-        run: npm run test:levels
+      - name: Headless game tests
+        run: npm test
       - run: npm run build
 
   ios:
-    needs: test
+    needs: [plan, test]
+    strategy: { fail-fast: false, matrix: { game: '${{ fromJSON(needs.plan.outputs.games) }}' } }
     runs-on: macos-15
     timeout-minutes: 45
     env:
-      GAME: ${{ inputs.game || 'pocket-ecosystem' }}
+      GAME: ${{ matrix.game }}
       SIGN: ${{ inputs.signed && 'true' || 'false' }}
-    defaults: { run: { working-directory: '${{ inputs.game || ''pocket-ecosystem'' }}' } }
+    defaults: { run: { working-directory: '${{ matrix.game }}' } }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm, cache-dependency-path: '${{ inputs.game || ''pocket-ecosystem'' }}/package-lock.json' }
+        with: { node-version: 22, cache: npm, cache-dependency-path: '${{ matrix.game }}/package-lock.json' }
       - name: Select Xcode
         run: |
           sudo xcode-select -s "$(ls -d /Applications/Xcode_16*.app | sort -V | tail -1)"
