@@ -8,6 +8,7 @@ const el = (html) => { const t = document.createElement('template'); t.innerHTML
 const fmtHour = (h) => { const hh = Math.floor(h), mm = Math.floor((h - hh) * 60 / 10) * 10; return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`; };
 const SEED_COLORS = { moss: '#6c9a3f', grass: '#93b553', fern: '#3f7a35', bloom: '#e59cc4', mushroom: '#d9c7a0', dewtrap: '#b8433c', algae: '#4f9a5a' };
 const CRE_COLORS = { snail: '#9b6a3c', pillbug: '#5c5a5e', firefly: '#ffd97a', frog: '#6f8f3c' };
+const hexRGB = (h) => { const n = parseInt(h.slice(1), 16); return { r: ((n >> 16) & 255) / 255, g: ((n >> 8) & 255) / 255, b: (n & 255) / 255 }; };
 const PLANT_BY_KEY = Object.fromEntries(Object.values(PLANTS).map((p) => [p.key, p]));
 
 export class Game {
@@ -20,6 +21,7 @@ export class Game {
     this.prevGoalsDone = 0;
     for (const g of this.goals.goals) g.m = measure(this.world, g);
     app.stage.attachWorld(this.world);
+    app.stage.celebrate(false); app.stage.intro(2.4);
     this.root = el('<div class="game"></div>');
     app.ui.appendChild(this.root);
     this.buildHud();
@@ -54,7 +56,7 @@ export class Game {
       </div>`;
     this.$ = (q) => this.root.querySelector(q);
     this.$('.pause-btn').onclick = () => this.pause();
-    this.$('.speed').onclick = () => { this.speed = this.speed === 1 ? 2 : this.speed === 2 ? 4 : 1; this.$('.speed').textContent = `${this.speed}×`; this.app.audio.tap(); haptic(); };
+    this.$('.speed').onclick = () => { this.speed = this.speed === 1 ? 2 : this.speed === 2 ? 4 : 1; this.$('.speed').textContent = `${this.speed}×`; this.app.audio.tap(); haptic(); this.coachEvent('speed'); };
     if (L.sandbox) this.$('.goals').hidden = true;
     // gauges
     const G3 = [
@@ -232,18 +234,18 @@ export class Game {
     if (!p || Math.hypot(p.x, p.z) > R) { this.hideInspect(); return; }
     if (this.tool === 'hand') { this.inspect(p, x, y); return; }
     let ok = false;
-    if (this.tool === 'mist') { ok = w.act({ tool: 'mist', x: p.x, z: p.z }); if (ok) this.app.audio.mist(); else this.toast('No mist left', true); }
+    if (this.tool === 'mist') { ok = w.act({ tool: 'mist', x: p.x, z: p.z }); if (ok) { this.app.audio.mist(); this.app.stage.burstMist(p.x, p.z); } else this.toast('No mist left', true); }
     else if (this.tool === 'seed') {
       if (!this.sub) return;
       ok = w.act({ tool: 'seed', type: this.sub, x: p.x, z: p.z });
-      if (ok) { this.app.audio.place(); this.openSub('seed'); this.discoverKey(this.sub); } else this.toast(w.inv.seeds?.[this.sub] > 0 ? 'Nothing can take root there' : 'No seeds of that kind left', true);
+      if (ok) { this.app.audio.place(); this.app.stage.burstSeed(p.x, p.z, hexRGB(SEED_COLORS[this.sub])); this.openSub('seed'); this.discoverKey(this.sub); } else this.toast(w.inv.seeds?.[this.sub] > 0 ? 'Nothing can take root there' : 'No seeds of that kind left', true);
     } else if (this.tool === 'creature') {
       if (!this.sub) return;
       ok = w.act({ tool: 'creature', type: this.sub, x: p.x, z: p.z });
-      if (ok) { this.app.audio.place(); this.openSub('creature'); this.toast(`Released ${this.sub === 'frog' ? 'the frog' : `a pair of ${plural(CREATURES[this.sub].name.toLowerCase())}`}`); this.discoverKey(this.sub); }
+      if (ok) { this.app.audio.place(); this.app.stage.burstSparkle(p.x, p.z, hexRGB(CRE_COLORS[this.sub]), 40); this.openSub('creature'); this.toast(`Released ${this.sub === 'frog' ? 'the frog' : `a pair of ${plural(CREATURES[this.sub].name.toLowerCase())}`}`); this.discoverKey(this.sub); }
     } else if (this.tool === 'prune') {
       ok = w.act({ tool: 'prune', x: p.x, z: p.z });
-      if (ok) this.app.audio.place(); else this.toast(w.inv.prune > 0 ? 'Nothing to cut there' : 'Your shears are worn out', true);
+      if (ok) { this.app.audio.place(); this.app.stage.burstPrune(p.x, p.z); } else this.toast(w.inv.prune > 0 ? 'Nothing to cut there' : 'Your shears are worn out', true);
     }
     if (ok) { haptic('medium'); this.refreshTools(); }
   }
@@ -251,6 +253,7 @@ export class Game {
   inspect(p, sx, sy) {
     const w = this.world, k = w.idx(p.x, p.z);
     if (k < 0) return;
+    if (w.pType[k]) this.coachEvent('inspect');
     this.hideInspect();
     const t = w.pType[k];
     const pct = (v) => `${Math.round(Math.max(0, Math.min(1, v)) * 100)}%`;
@@ -302,7 +305,7 @@ export class Game {
       <p class="sub">Within ${L.days} days. Two stars by day ${L.par}${bonus ? `; three if you also: ${bonus.toLowerCase()}` : ''}.</p>
       <div class="hintbox">${L.hint}</div>
       <div class="row"><button class="btn ghost" data-a="back">Leave</button><button class="btn" data-a="go">Begin</button></div>`, {
-      go: () => { this.closeModal(); this.state = 'play'; this.app.requestMotion(); this.selectTool('hand'); this.setHint(L.hint); },
+      go: () => { this.closeModal(); this.state = 'play'; this.app.requestMotion(); this.selectTool('hand'); if (L.id === 1 && !this.app.save.seenIntro[1]) this.startCoach(); else this.setHint(L.hint); },
       back: () => this.app.toLevels(),
     });
   }
@@ -340,7 +343,7 @@ export class Game {
       app.save.stars[L.id] = Math.max(prev, stars);
       const best = app.save.best[L.id] || {}; best.plays = (best.plays || 0) + 1; best.day = Math.min(best.day ?? 99, g.winDay); app.save.best[L.id] = best;
       app.persist();
-      app.audio.chime(); haptic('success');
+      app.audio.chime(); haptic('success'); app.stage.celebrate(true);
       const peak = Object.entries(w.stats.peak).filter(([t, n]) => n > 0 && t !== 'gnat').map(([t, n]) => `<span>Most ${plural(CREATURES[t].name.toLowerCase())}</span><span>${n}</span>`).join('');
       const next = app.levels.find((l) => l.id === L.id + 1);
       this.modal(`<h2>${['', 'The jar lives', 'A thriving jar', 'A perfect jar'][stars]}</h2>
@@ -378,6 +381,7 @@ export class Game {
     w.setTilt(tx * Math.cos(a) + tz * Math.sin(a), -tx * Math.sin(a) + tz * Math.cos(a));
 
     if (this.state === 'play') {
+      this.tickCoach(dt);
       const t0 = w.time;
       w.update(dt, this.speed);
       if (w.time !== t0) this.goals.update(w, w.time - t0);
@@ -400,8 +404,8 @@ export class Game {
     let plinks = 0, blooms = 0, hatch = 0;
     for (const e of w.events) {
       if (e.e === 'drip') plinks++;
-      else if (e.e === 'bloom') { blooms++; this.discoverKey('bloom'); }
-      else if (e.e === 'hatch') { hatch++; this.discoverKey(e.type); }
+      else if (e.e === 'bloom') { blooms++; this.discoverKey('bloom'); this.app.stage.burstSparkle(w.cx[e.k], w.cz[e.k], { r: 1, g: 0.6, b: 0.85 }, 18, w.h[e.k] + 0.16); }
+      else if (e.e === 'hatch') { hatch++; this.discoverKey(e.type); const c = w.creatures.find((x) => x.id === e.id); if (c) this.app.stage.burstSparkle(c.x, c.z, { r: 1, g: 0.95, b: 0.7 }, 10); }
       else if (e.e === 'born' && e.type === 'gnat') this.discoverKey('gnat');
       else if (e.e === 'die' && (e.type === 'frog')) this.toast('The frog has died', true);
       else if (e.e === 'tongue') { /* snap */ }
@@ -444,7 +448,40 @@ export class Game {
     else if (!msg) this.warned.last = null;
   }
 
-  destroy() { this.unbind?.(); this.root.remove(); this.app.stage.clearWorld(); }
+  // ---------------- First-jar coach ----------------
+  startCoach() {
+    const pad = !this.app.motion.hasSensor || this.app.save.settings.tilt === 'touch';
+    this.coach = { step: 0, held: 0, t: 0, steps: [
+      { text: pad ? 'Drag the blue ball toward the moss to tip the jar. Water runs downhill.' : 'Tip your phone toward the moss. Water runs downhill.', icon: pad ? 'pad' : 'phone', done: (c) => c.held > 1.2 },
+      { text: 'Dry soil drinks the water as it passes. Keep it flowing onto the moss.', done: (c) => c.t > 7 },
+      { text: 'Tap the moss to check how it is doing.', icon: 'tap', done: (c) => c.inspected },
+      { text: 'Moss spreads when it is damp. Tap 1× to speed up time.', icon: 'speed', done: (c) => c.sped },
+    ] };
+    this.setHint('');
+    this.coachEl = el('<div class="coach" role="status"><span class="coach-ico"></span><p></p><small></small></div>');
+    this.root.appendChild(this.coachEl);
+    this.showCoachStep();
+  }
+  showCoachStep() {
+    const c = this.coach, st = c.steps[c.step];
+    if (!st) { this.coachEl.remove(); this.coach = null; this.app.save.seenIntro[1] = true; this.app.persist(); this.setHint(this.level.hint); return; }
+    this.coachEl.querySelector('p').textContent = st.text;
+    this.coachEl.querySelector('small').textContent = `${c.step + 1} of ${c.steps.length}`;
+    this.coachEl.querySelector('.coach-ico').className = `coach-ico ${st.icon || ''}`;
+    this.coachEl.classList.remove('pop'); void this.coachEl.offsetWidth; this.coachEl.classList.add('pop');
+    this.$('.speed').classList.toggle('glow', st.icon === 'speed');
+    c.t = 0; c.held = 0;
+  }
+  coachEvent(kind) { if (!this.coach) return; if (kind === 'inspect') this.coach.inspected = true; if (kind === 'speed') this.coach.sped = true; }
+  tickCoach(dt) {
+    const c = this.coach; if (!c) return;
+    c.t += dt;
+    const w = this.world;
+    if (Math.hypot(w.tiltX, w.tiltZ) > 0.45) c.held += dt; else c.held = Math.max(0, c.held - dt * 0.5);
+    if (c.steps[c.step].done(c)) { c.step++; this.app.audio.goal(); haptic('light'); this.showCoachStep(); }
+  }
+
+  destroy() { this.unbind?.(); this.coach = null; this.root.remove(); this.app.stage.celebrate(false); this.app.stage.clearWorld(); }
 }
 
 export { G };

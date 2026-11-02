@@ -53,17 +53,21 @@ class App {
   async init() {
     this.save = await loadSave();
     this.applySettings();
+    this.applyGraphics();
+    this.perf = { acc: 0, n: 0, warm: 0 };
     await platformReady();
     this.toTitle();
     const loop = (now) => {
       const dt = Math.min(0.1, (now - this.last) / 1000); this.last = now; this.t += dt;
       if (this.motion.mode === 'touch' || (!this.motion.hasSensor && this.game)) { this.motion.x = this.motion.touchX; this.motion.z = this.motion.touchZ; this.motion.active = true; }
+      this.trackPerf(dt);
       if (this.game) this.game.update(dt);
       else if (this.demo) {
         this.demo.update(dt, 3);
         this.demo.rot += dt * 0.12;
         this.stage.render(dt, this.t, { zoom: 1.0, lookY: 0.95, pitch: 0.42 });
       }
+      if (!this.booted) { this.booted = true; const b = document.getElementById('boot'); if (b) { b.classList.add('done'); setTimeout(() => b.remove(), 700); } }
       requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
@@ -74,6 +78,20 @@ class App {
     this.audio.setEnabled(s.sound); this.audio.setMusic(s.music); setHaptics(s.haptics); this.motion.mode = s.tilt;
   }
   persist() { saveGame(this.save); }
+  graphicsTier() { const s = this.save.settings; return s.graphics && s.graphics !== 'auto' ? s.graphics : (s.autoTier || 'high'); }
+  applyGraphics() { const t = this.graphicsTier(); if (this.stage.qualityName !== t) this.stage.setQuality(t); }
+  // Auto quality: if frames run slow for a few seconds, step down one tier and remember it.
+  trackPerf(dt) {
+    const s = this.save.settings; if (s.graphics && s.graphics !== 'auto') return;
+    if (document.hidden || (this.game && this.game.state !== 'play')) return;
+    const p = this.perf; p.warm += dt; if (p.warm < 3) return;
+    p.acc += dt; p.n++;
+    if (p.acc > 4) {
+      const avg = p.acc / p.n; p.acc = 0; p.n = 0;
+      const order = ['high', 'balanced', 'battery'], cur = order.indexOf(this.graphicsTier());
+      if (avg > 1 / 38 && cur < 2) { s.autoTier = order[cur + 1]; this.applyGraphics(); this.persist(); p.warm = 0; }
+    }
+  }
   chapterName(id) { return CHAPTERS.find((c) => c.id === id)?.name || ''; }
   async requestMotion() {
     if (this.save.settings.tilt === 'touch') return;
@@ -90,6 +108,7 @@ class App {
     ], creatures: [{ type: 'snail', n: 2, x: -0.3, z: 0.1, r: 0.2 }, { type: 'firefly', n: 5, x: 0, z: 0, r: 0.5 }], startHour: 17, wild: false };
     this.demo = new World(L, 3);
     this.stage.attachWorld(this.demo);
+    Object.assign(this.stage.cam, { zoom: 1, pitch: 0.42, introDur: 0, yaw: 0 });
   }
 
   toTitle() {
@@ -113,7 +132,7 @@ class App {
 
   toLevels() {
     this.clearScreen();
-    if (!this.demo) this.startDemo(); else this.stage.attachWorld(this.demo);
+    if (!this.demo) this.startDemo(); else { this.stage.attachWorld(this.demo); Object.assign(this.stage.cam, { zoom: 1, pitch: 0.42, introDur: 0, yaw: 0 }); }
     const nextId = (LEVELS.find((l) => !this.save.stars[l.id]) || {}).id;
     const total = Object.values(this.save.stars).reduce((a, b) => a + b, 0);
     const soils = ['#6b4f37', '#4f5f70', '#5a4a6a', '#6a5a3a'];
@@ -197,10 +216,12 @@ class App {
     const sw = (k, label) => `<div class="setting"><span>${label}</span><button class="switch" role="switch" data-k="${k}" aria-checked="${s[k]}" aria-label="${label}"></button></div>`;
     const sc = this.sheet(`<h2>Settings</h2>
       ${sw('sound', 'Sound')}${sw('music', 'Ambience')}${sw('haptics', 'Haptics')}
+      <div class="setting"><span>Graphics</span><div class="seg" role="group" aria-label="Graphics quality">${['auto', 'high', 'balanced', 'battery'].map((m) => `<button data-g="${m}" aria-pressed="${(s.graphics || 'auto') === m}">${{ auto: 'Auto', high: 'High', balanced: 'Balanced', battery: 'Saver' }[m]}</button>`).join('')}</div></div>
       <div class="setting"><span>Tilting</span><div class="seg" role="group" aria-label="Tilt control">${['auto', 'motion', 'touch'].map((m) => `<button data-m="${m}" aria-pressed="${s.tilt === m}">${{ auto: 'Auto', motion: 'Motion', touch: 'Touch pad' }[m]}</button>`).join('')}</div></div>
       <div class="setting"><span>Progress</span><button class="btn ghost" data-a="reset" style="padding:8px 14px;font-size:15px">Clear all progress</button></div>`, onClose);
     sc.querySelectorAll('.switch').forEach((b) => { b.onclick = () => { s[b.dataset.k] = !s[b.dataset.k]; b.setAttribute('aria-checked', s[b.dataset.k]); this.applySettings(); this.persist(); this.audio.tap(); }; });
-    sc.querySelectorAll('.seg button').forEach((b) => { b.onclick = () => { s.tilt = b.dataset.m; sc.querySelectorAll('.seg button').forEach((x) => x.setAttribute('aria-pressed', x === b)); this.applySettings(); this.persist(); this.audio.tap(); }; });
+    sc.querySelectorAll('.seg button[data-g]').forEach((b) => { b.onclick = () => { s.graphics = b.dataset.g; if (s.graphics === 'auto') s.autoTier = 'high'; sc.querySelectorAll('.seg button[data-g]').forEach((x) => x.setAttribute('aria-pressed', x === b)); this.applyGraphics(); this.persist(); this.audio.tap(); }; });
+    sc.querySelectorAll('.seg button[data-m]').forEach((b) => { b.onclick = () => { s.tilt = b.dataset.m; sc.querySelectorAll('.seg button[data-m]').forEach((x) => x.setAttribute('aria-pressed', x === b)); this.applySettings(); this.persist(); this.audio.tap(); }; });
     sc.querySelector('[data-a="reset"]').onclick = (e) => {
       const b = e.currentTarget;
       if (b.dataset.confirm) { this.save.stars = {}; this.save.best = {}; this.save.codex = {}; this.persist(); b.textContent = 'Progress cleared'; b.disabled = true; }

@@ -4,33 +4,57 @@ import { glowSprite } from './textures.js';
 
 const MAX = 64;
 
+function paint(g, fn) {
+  if (g.index) g = g.toNonIndexed();
+  for (const k of Object.keys(g.attributes)) if (!['position', 'normal'].includes(k)) g.deleteAttribute(k);
+  const p = g.attributes.position, c = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) { const v = fn(p.getX(i), p.getY(i), p.getZ(i)); c.set(v, i * 3); }
+  g.setAttribute('color', new THREE.BufferAttribute(c, 3)); return g;
+}
 function snailGeo() {
-  const shell = new THREE.TorusGeometry(0.014, 0.009, 8, 14, Math.PI * 1.8); shell.rotateY(Math.PI / 2); shell.translate(0, 0.022, 0);
-  const shell2 = new THREE.SphereGeometry(0.011, 10, 8); shell2.translate(0, 0.022, 0);
-  const body = new THREE.CapsuleGeometry(0.006, 0.03, 4, 8); body.rotateZ(Math.PI / 2); body.translate(0.006, 0.006, 0);
-  const st1 = new THREE.CylinderGeometry(0.0012, 0.0012, 0.014, 4); st1.rotateZ(-0.4); st1.translate(0.026, 0.014, 0.003);
-  const st2 = st1.clone(); st2.translate(0, 0, -0.006);
-  return { shell: mergeGeometries([shell.toNonIndexed(), shell2.toNonIndexed()]), body: mergeGeometries([body.toNonIndexed(), st1.toNonIndexed(), st2.toNonIndexed()]) };
+  const shell = new THREE.TorusGeometry(0.0135, 0.0095, 10, 24, Math.PI * 1.85); shell.rotateY(Math.PI / 2); shell.translate(0, 0.022, 0);
+  const core = new THREE.SphereGeometry(0.0105, 12, 10); core.translate(0, 0.022, 0);
+  const stripes = (x, y, z) => { const a = Math.atan2(y - 0.022, z); const band = Math.sin(a * 5 + Math.hypot(y - 0.022, z) * 400); return band > 0.55 ? [0.45, 0.28, 0.16] : band < -0.7 ? [0.95, 0.8, 0.55] : [0.72, 0.5, 0.3]; };
+  const body = new THREE.CapsuleGeometry(0.0062, 0.032, 6, 10); body.rotateZ(Math.PI / 2); body.scale(1, 0.8, 1); body.translate(0.007, 0.005, 0);
+  const parts = [paint(body, (x, y) => (y < 0.003 ? [0.62, 0.55, 0.45] : [0.78, 0.7, 0.58]))];
+  for (const sz of [0.003, -0.003]) {
+    const st = new THREE.CylinderGeometry(0.0011, 0.0011, 0.015, 5); st.rotateZ(-0.45); st.translate(0.027, 0.014, sz);
+    const eye = new THREE.SphereGeometry(0.0018, 6, 4); eye.translate(0.031, 0.021, sz);
+    parts.push(paint(st, () => [0.72, 0.64, 0.52]), paint(eye, () => [0.15, 0.12, 0.1]));
+  }
+  return { shell: mergeGeometries([paint(shell, stripes), paint(core, stripes)]), body: mergeGeometries(parts) };
 }
 function pillbugGeo() {
   const parts = [];
-  for (let i = 0; i < 6; i++) { const s = new THREE.SphereGeometry(0.0085 - Math.abs(i - 2.5) * 0.0009, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2); s.scale(0.55, 0.8, 1); s.translate(-0.013 + i * 0.0052, 0.001, 0); parts.push(s); }
+  for (let i = 0; i < 7; i++) {
+    const s = new THREE.SphereGeometry(0.0085 - Math.abs(i - 3) * 0.0008, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+    s.scale(0.5, 0.82, 1); s.translate(-0.015 + i * 0.005, 0.001, 0);
+    const tone = i % 2 ? [0.42, 0.41, 0.45] : [0.5, 0.49, 0.53];
+    parts.push(paint(s, (x, y, z) => (Math.abs(z) > 0.006 ? [0.62, 0.58, 0.55] : tone)));
+  }
+  for (const sz of [1, -1]) { const a = new THREE.CylinderGeometry(0.0006, 0.0006, 0.009, 3); a.rotateZ(1.2); a.rotateY(sz * 0.5); a.translate(0.02, 0.003, sz * 0.003); parts.push(paint(a, () => [0.3, 0.3, 0.32])); }
   return mergeGeometries(parts);
 }
 function fireflyGeo() {
-  const b = new THREE.CapsuleGeometry(0.003, 0.008, 3, 6); b.rotateZ(Math.PI / 2);
-  const w1 = new THREE.PlaneGeometry(0.01, 0.005); w1.rotateX(-Math.PI / 2); w1.translate(-0.001, 0.003, 0.004);
-  const w2 = w1.clone(); w2.translate(0, 0, -0.008);
-  return mergeGeometries([b.toNonIndexed(), w1.toNonIndexed(), w2.toNonIndexed()]);
+  const b = new THREE.CapsuleGeometry(0.0028, 0.006, 3, 8); b.rotateZ(Math.PI / 2); b.translate(0.002, 0, 0);
+  const tail = new THREE.SphereGeometry(0.0032, 8, 6); tail.scale(1.3, 1, 1); tail.translate(-0.005, -0.0005, 0);
+  const w1 = new THREE.CircleGeometry(0.0055, 8); w1.scale(1.6, 0.6, 1); w1.rotateX(-Math.PI / 2); w1.rotateY(0.5); w1.translate(-0.001, 0.003, 0.004);
+  const w2 = new THREE.CircleGeometry(0.0055, 8); w2.scale(1.6, 0.6, 1); w2.rotateX(-Math.PI / 2); w2.rotateY(-0.5); w2.translate(-0.001, 0.003, -0.004);
+  return mergeGeometries([paint(b, () => [0.25, 0.2, 0.17]), paint(tail, () => [1.4, 1.3, 0.5]), paint(w1, () => [0.75, 0.72, 0.65]), paint(w2, () => [0.75, 0.72, 0.65])]);
 }
 function frogGeo() {
-  const body = new THREE.SphereGeometry(0.03, 12, 10); body.scale(1.2, 0.7, 1); body.translate(0, 0.02, 0);
-  const head = new THREE.SphereGeometry(0.021, 10, 8); head.scale(1.1, 0.75, 1.2); head.translate(0.03, 0.026, 0);
-  const e1 = new THREE.SphereGeometry(0.008, 8, 6); e1.translate(0.035, 0.04, 0.012);
-  const e2 = e1.clone(); e2.translate(0, 0, -0.024);
-  const legs = [];
-  for (const sz of [-1, 1]) { const l = new THREE.CapsuleGeometry(0.007, 0.03, 3, 6); l.rotateZ(Math.PI / 2); l.rotateY(sz * 0.6); l.translate(-0.02, 0.008, sz * 0.025); legs.push(l.toNonIndexed()); }
-  return mergeGeometries([body.toNonIndexed(), head.toNonIndexed(), e1.toNonIndexed(), e2.toNonIndexed(), ...legs]);
+  const spots = (x, y, z) => { const s = Math.sin(x * 260) * Math.sin(z * 230) * Math.sin(y * 180); return y < 0.014 ? [0.85, 0.82, 0.55] : s > 0.45 ? [0.22, 0.32, 0.12] : [0.42, 0.62, 0.22]; };
+  const body = new THREE.SphereGeometry(0.03, 18, 14); body.scale(1.2, 0.7, 1); body.translate(0, 0.02, 0);
+  const head = new THREE.SphereGeometry(0.021, 16, 12); head.scale(1.1, 0.72, 1.2); head.translate(0.03, 0.026, 0);
+  const parts = [paint(body, spots), paint(head, spots)];
+  for (const sz of [1, -1]) {
+    const e = new THREE.SphereGeometry(0.0078, 10, 8); e.translate(0.035, 0.039, sz * 0.012);
+    const pu = new THREE.SphereGeometry(0.0042, 8, 6); pu.scale(0.6, 1, 1); pu.translate(0.0418, 0.04, sz * 0.0135);
+    const l = new THREE.CapsuleGeometry(0.0068, 0.03, 4, 8); l.rotateZ(Math.PI / 2); l.rotateY(sz * 0.6); l.translate(-0.02, 0.008, sz * 0.025);
+    const f = new THREE.CapsuleGeometry(0.004, 0.016, 3, 6); f.rotateZ(Math.PI / 2 + 0.6); f.rotateY(-sz * 0.4); f.translate(0.032, 0.006, sz * 0.02);
+    parts.push(paint(e, () => [0.95, 0.78, 0.25]), paint(pu, () => [0.05, 0.05, 0.05]), paint(l, spots), paint(f, spots));
+  }
+  return mergeGeometries(parts);
 }
 
 export class Fauna {
@@ -38,12 +62,12 @@ export class Fauna {
     this.group = new THREE.Group(); parent.add(this.group);
     const sg = snailGeo();
     const mk = (geo, mat) => { const m = new THREE.InstancedMesh(geo, mat, MAX); m.count = 0; m.castShadow = true; m.frustumCulled = false; this.group.add(m); return m; };
-    this.snailShell = mk(sg.shell, new THREE.MeshStandardMaterial({ color: 0x9b6a3c, roughness: 0.35 }));
-    this.snailBody = mk(sg.body, new THREE.MeshStandardMaterial({ color: 0xb7a58a, roughness: 0.4 }));
-    this.pillbug = mk(pillbugGeo(), new THREE.MeshStandardMaterial({ color: 0x5c5a5e, roughness: 0.45, metalness: 0.1 }));
-    this.firefly = mk(fireflyGeo(), new THREE.MeshStandardMaterial({ color: 0x2d2620, roughness: 0.6, side: THREE.DoubleSide }));
+    this.snailShell = mk(sg.shell, new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.3, clearcoat: 0.8, clearcoatRoughness: 0.2 }));
+    this.snailBody = mk(sg.body, new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.1 }));
+    this.pillbug = mk(pillbugGeo(), new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.35, clearcoat: 0.6, clearcoatRoughness: 0.3 }));
+    this.firefly = mk(fireflyGeo(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, side: THREE.DoubleSide, transparent: false }));
     this.gnat = mk(new THREE.SphereGeometry(0.0028, 5, 4), new THREE.MeshBasicMaterial({ color: 0x1e1b19 }));
-    this.frog = mk(frogGeo(), new THREE.MeshStandardMaterial({ color: 0x6f8f3c, roughness: 0.3 }));
+    this.frog = mk(frogGeo(), new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.15 }));
     this.egg = mk(new THREE.SphereGeometry(0.004, 6, 4), new THREE.MeshStandardMaterial({ color: 0xf0ead8, roughness: 0.3 }));
     // firefly glow
     const pg = new THREE.BufferGeometry();
@@ -53,7 +77,7 @@ export class Fauna {
     this.glowMat = new THREE.ShaderMaterial({
       uniforms: { map: { value: glowSprite() }, scale: { value: 300 } },
       vertexShader: 'attribute float size; uniform float scale; void main(){ vec4 mv = modelViewMatrix*vec4(position,1.); gl_PointSize = size*scale/ -mv.z; gl_Position = projectionMatrix*mv; }',
-      fragmentShader: 'uniform sampler2D map; void main(){ vec4 c = texture2D(map, gl_PointCoord); gl_FragColor = vec4(c.rgb*vec3(1.0,0.95,0.55), c.a); }',
+      fragmentShader: 'uniform sampler2D map; void main(){ vec4 c = texture2D(map, gl_PointCoord); gl_FragColor = vec4(c.rgb*vec3(2.6,2.3,1.1), c.a); }',
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     });
     this.glow = new THREE.Points(pg, this.glowMat); this.glow.frustumCulled = false; this.glow.renderOrder = 5;

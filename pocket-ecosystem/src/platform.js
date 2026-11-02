@@ -9,7 +9,7 @@ const KEY = 'pocket-ecosystem-v1';
 
 const defaults = () => ({
   stars: {}, best: {}, codex: {}, seenIntro: {},
-  settings: { sound: true, music: true, haptics: true, tilt: 'auto', speedHint: true },
+  settings: { sound: true, music: true, haptics: true, tilt: 'auto', speedHint: true, graphics: 'auto', autoTier: 'high' },
 });
 
 export async function loadSave() {

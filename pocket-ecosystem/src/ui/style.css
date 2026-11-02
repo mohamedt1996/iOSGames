@@ -40,6 +40,8 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--petal)
 
 /* ---------- title screen ---------- */
 .title-screen { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between; padding: calc(var(--safe-t) + 36px) 24px calc(var(--safe-b) + 28px); }
+.title-screen::before { content: ''; position: absolute; inset: 0 0 auto; height: 52%; background: linear-gradient(rgba(205, 214, 212, 0.92), rgba(205, 214, 212, 0.75) 55%, rgba(205, 214, 212, 0)); pointer-events: none; z-index: -1; }
+.title-screen { z-index: 0; isolation: isolate; }
 .title-screen h1 { margin: 0; font-family: var(--serif); font-weight: 400; font-size: clamp(44px, 13vw, 76px); line-height: 0.92; color: var(--glass); letter-spacing: -0.01em; }
 .title-screen h1 span { display: block; padding-left: 0.6em; }
 .title-screen p.lede { margin: 14px 0 0; max-width: 28ch; color: var(--ink-soft); font-size: 17px; line-height: 1.4; }
@@ -177,3 +179,29 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--petal)
 .game > .hud-top, .game > .toolbar-wrap, .game > .toasts, .game > .gauges { pointer-events: none; }
 .game .hud-top > *, .game .toolbar-wrap > * { pointer-events: auto; }
 .game .hint-line { pointer-events: none; }
+
+/* boot screen */
+#boot { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: radial-gradient(circle at 50% 40%, #2d6157, #1e4a43 70%); color: var(--label); font-family: var(--serif); font-size: 22px; transition: opacity 0.6s ease; }
+#boot.done { opacity: 0; pointer-events: none; }
+#boot p { margin: 0; letter-spacing: 0.02em; }
+.boot-jar { position: relative; width: 70px; height: 84px; border-radius: 34px 34px 10px 10px; box-shadow: inset 0 0 0 2px rgba(239, 226, 184, 0.6); overflow: hidden; }
+.boot-jar::before { content: ''; position: absolute; top: -2px; left: 22px; right: 22px; height: 10px; background: #b48a5c; border-radius: 3px; }
+.boot-jar i { position: absolute; left: 0; right: 0; bottom: 0; height: 30%; background: linear-gradient(#6c9a3f, #3d2b1d 40%); animation: grow 1.6s ease-in-out infinite alternate; }
+@keyframes grow { to { height: 52%; } }
+
+/* first-jar coach */
+.coach { position: absolute; left: 50%; transform: translateX(-50%); top: calc(var(--safe-t) + 206px); width: min(88vw, 360px); display: grid; grid-template-columns: 44px 1fr; gap: 4px 12px; align-items: center; padding: 12px 14px; border-radius: 18px; background: var(--label); color: var(--ink); box-shadow: 0 14px 30px rgba(20, 40, 35, 0.28); pointer-events: none; z-index: 6; }
+.coach.pop { animation: coach-pop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.3); }
+@keyframes coach-pop { from { transform: translateX(-50%) scale(0.92); opacity: 0; } }
+.coach p { margin: 0; font-size: 15px; line-height: 1.35; }
+.coach small { grid-column: 2; color: var(--ink-soft); font-size: 12px; }
+.coach-ico { grid-row: span 2; width: 40px; height: 40px; border-radius: 12px; background: var(--glass); position: relative; }
+.coach-ico::after { content: ''; position: absolute; inset: 9px 12px; border-radius: 4px; border: 2px solid var(--label); }
+.coach-ico.phone::after { animation: tip 1.6s ease-in-out infinite; }
+.coach-ico.pad::after { inset: 12px; border-radius: 50%; background: #5aa7d0; border: 0; animation: nudge 1.6s ease-in-out infinite; }
+.coach-ico.tap::after { inset: 13px; border-radius: 50%; border: 2px solid var(--label); animation: ping 1.2s ease-out infinite; }
+.coach-ico.speed::after { content: '1×'; inset: 0; border: 0; display: grid; place-items: center; color: var(--label); font-weight: 700; }
+@keyframes tip { 0%, 100% { transform: rotate(-18deg); } 50% { transform: rotate(18deg); } }
+@keyframes nudge { 0%, 100% { transform: translate(-6px, 4px); } 50% { transform: translate(6px, -4px); } }
+@keyframes ping { 0% { transform: scale(0.6); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
+.speed.glow { box-shadow: 0 0 0 3px var(--petal), 0 0 18px var(--petal); }
