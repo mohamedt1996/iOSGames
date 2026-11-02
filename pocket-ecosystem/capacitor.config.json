@@ -1,0 +1,9 @@
+{
+  "appId": "com.mohamedt1996.pocketecosystem",
+  "appName": "Pocket Ecosystem",
+  "webDir": "dist",
+  "ios": { "contentInset": "never", "backgroundColor": "#cdd6d4", "scrollEnabled": false },
+  "plugins": {
+    "SplashScreen": { "launchShowDuration": 600, "backgroundColor": "#cdd6d4", "showSpinner": false }
+  }
+}
