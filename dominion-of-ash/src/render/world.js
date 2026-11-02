@@ -3,7 +3,7 @@ import { Assets } from './assets.js';
 import { offsetToAxial, toWorld } from '../core/hex.js';
 import { COLS, ROWS, TERRAIN } from '../battle/maps.js';
 import { mulberry32 } from '../core/rng.js';
-import { bakeParts, grassTint } from './look.js';
+import { bakeParts, grassTint, Water, Foliage } from './look.js';
 
 export const HILL_Y = 0.55;
 const M = (x, y, z, ry = 0, s = 1) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, 0)), new THREE.Vector3(s, s, s));
@@ -24,7 +24,7 @@ export class BattleWorld {
       const rot = Math.floor(r() * 6) * (Math.PI / 3);
       const y = this.cellY(c);
       switch (c.type) {
-        case 'water': add('hex_water', M(c.x, 0, c.z)); break;
+        case 'water': break; // the animated water surface shows through
         case 'river': add('hex_river_crossing_A', M(c.x, 0, c.z, Math.PI / 6)); break;
         case 'bridge': add('hex_river_A', M(c.x, 0, c.z, Math.PI / 2)); add('building_bridge_A', M(c.x, 0, c.z, Math.PI / 2)); break;
         case 'hill': add('hex_grass', M(c.x, y, c.z, rot), G()); add('hex_grass_bottom', M(c.x, y - 0.5, c.z, rot)); add(r() < 0.5 ? 'rock_single_A' : 'rock_single_C', M(c.x + (r() - 0.5), y, c.z + (r() - 0.5), rot, 0.6)); break;
@@ -37,11 +37,19 @@ export class BattleWorld {
       if (c.type === 'forest') this.plantForest(c);
       else if (c.type === 'grass' && r() < 0.12) add(['rock_single_D', 'rock_single_E', 'tree_single_A_cut'][Math.floor(r() * 3)], M(c.x + (r() - 0.5) * 1.2, 0, c.z + (r() - 0.5) * 1.2, rot, 0.7));
     }
+    this.landPts = [...field.grid].filter((c) => c.type !== 'water').map((c) => [c.x, c.z]);
     this.addBorder(add);
     // banner tower
     const b = field.banner;
     add('building_tower_base_yellow', M(b.x + 0.5, this.cellY(b), b.z - 0.55, 0, 0.45));
     this.bake(parts);
+    this.water = new Water(this.group, this.landPts, { night: field.night });
+    // grass tufts and wildflowers on open ground
+    const spots = [];
+    for (const c of field.grid) {
+      if (['grass', 'hill', 'road', 'ruin', 'town', 'forest'].includes(c.type)) spots.push({ x: c.x, z: c.z, y: this.cellY(c), n: c.type === 'grass' ? 9 : c.type === 'hill' ? 7 : c.type === 'forest' ? 6 : 5, radius: c.type === 'road' ? 0.95 : 0.85 });
+    }
+    this.foliage = new Foliage(this.group, spots, this.rand);
     this.flags = {};
     for (const [side, name] of [['ember', 'flag_blue'], ['ash', 'flag_red'], ['none', 'flag_yellow']]) {
       const f = Assets.prop(name); f.position.set(b.x - 0.35, this.cellY(b), b.z + 0.1); f.scale.setScalar(1.1); f.visible = side === 'none';
@@ -90,7 +98,8 @@ export class BattleWorld {
       const [q, rr] = offsetToAxial(col, row); const [x, z] = toWorld(q, rr);
       const ring = Math.max(-row, row - ROWS + 1, -col, col - COLS + 1);
       const rot = Math.floor(r() * 6) * (Math.PI / 3);
-      if (ring >= 3) { add('hex_water', M(x, 0, z)); continue; }
+      if (ring >= 3) continue;
+      this.landPts.push([x, z]);
       add('hex_grass', M(x, 0, z, rot), grassTint(r).map((v) => v * 0.92));
       const k = r();
       if (ring >= 2 || k < 0.35) add(['mountain_A_grass_trees', 'mountain_B_grass_trees', 'mountain_C_grass', 'hills_A_trees', 'hills_B_trees'][Math.floor(r() * 5)], M(x, 0, z, rot));
@@ -121,5 +130,6 @@ export class BattleWorld {
     for (const k in this.flags) this.flags[k].visible = k === lead;
   }
 
-  dispose() { this.scene.remove(this.group); this.group.traverse((o) => { if (o.geometry && o.name === 'terrain') { o.geometry.dispose(); if (o.material.vertexColors) o.material.dispose(); } }); }
+  animate(time, sunDir) { this.water.update(time, sunDir); this.foliage.update(time); }
+  dispose() { this.water.dispose(); this.foliage.dispose(); this.scene.remove(this.group); this.group.traverse((o) => { if (o.geometry && o.name === 'terrain') { o.geometry.dispose(); if (o.material.vertexColors) o.material.dispose(); } }); }
 }

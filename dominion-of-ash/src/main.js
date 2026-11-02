@@ -47,7 +47,7 @@ class TitleScene {
     this.t += dt;
     const r = this.app.stage.rig; r.tx = this.center.x; r.tz = this.center.z; r.yaw = 0.9 + this.t * 0.04; r.dist = 15 + Math.sin(this.t * 0.1) * 1.5;
     this.views.sync(this.battle, dt, this.app.stage.camera, new Set());
-    this.air.update(dt, this.t); this.embers.update(dt, this.t);
+    this.air.update(dt, this.t); this.embers.update(dt, this.t); this.world.animate(this.t, this.app.stage.sunDir);
   }
   dispose() { this.views.dispose(); this.world.dispose(); const r = this.app.stage.rig; r.pitch = 0.95; r.minD = 9; }
 }

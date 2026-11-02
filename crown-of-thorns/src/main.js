@@ -30,7 +30,7 @@ class TitleScene {
     const r = app.stage.rig; r.bounds = null; r.tx = 0; r.tz = 0; r.pitch = 0.62; r.dist = 24;
     this.t = 0;
   }
-  step(dt, time) { this.t += dt; const r = this.app.stage.rig; r.yaw = this.t * 0.05; r.tz = 0; r.tx = 0; this.view.update(dt, time); this.app.audio.update(dt); }
+  step(dt, time) { this.t += dt; const r = this.app.stage.rig; r.yaw = this.t * 0.05; r.tz = 0; r.tx = 0; this.view.update(dt, time, this.app.stage.sunDir); this.app.audio.update(dt); }
   dispose() { this.view.dispose(); this.app.stage.rig.pitch = 1.0; }
 }
 

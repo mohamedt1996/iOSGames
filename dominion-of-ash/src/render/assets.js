@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { addRim } from './look.js';
 
 // Loads the CC0 KayKit models (by Kay Lousberg) and hands out clones.
 const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
@@ -37,7 +38,7 @@ export const Assets = {
   character(model) {
     const g = this.chars[model];
     const root = SkeletonUtils.clone(g.scene);
-    root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false; if (o.material) { o.material = o.material.clone(); } } });
+    root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false; if (o.material) { o.material = o.material.clone(); addRim(o.material); } } });
     const mixer = new THREE.AnimationMixer(root);
     const actions = {};
     for (const clip of g.animations) actions[clip.name] = mixer.clipAction(clip);

@@ -3,7 +3,7 @@ import { Assets } from '../render/assets.js';
 import { ringTexture } from '../render/textures.js';
 import { mulberry32 } from '../core/rng.js';
 import { toWorld } from '../core/hex.js';
-import { bakeParts, grassTint, blobShadow } from '../render/look.js';
+import { bakeParts, grassTint, blobShadow, Water, Foliage } from '../render/look.js';
 
 const M = (x, y, z, ry = 0, s = 1) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, 0)), new THREE.Vector3(s, s, s));
 const COLOR = { ember: 'blue', ash: 'red', null: 'yellow' };
@@ -23,7 +23,7 @@ export class MapView {
       const rot = Math.floor(r() * 6) * Math.PI / 3;
       if (reg.type !== 'sea') { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
       switch (reg.type) {
-        case 'sea': add('hex_water', M(x, 0, z)); if (r() < 0.08) add('waterlily_A', M(x, 0, z, rot)); break;
+        case 'sea': if (r() < 0.06) add('waterlily_A', M(x, -0.17, z, rot)); break;
         case 'forest': add('hex_grass', M(x, 0, z, rot), G()); add(['trees_A_large', 'trees_B_large', 'trees_A_medium'][Math.floor(r() * 3)], M(x, 0, z, rot)); break;
         case 'hills': add('hex_grass', M(x, 0, z, rot), G()); add(['hills_A_trees', 'hills_B', 'hills_C_trees'][Math.floor(r() * 3)], M(x, 0, z, rot)); break;
         case 'mountain': add('hex_grass', M(x, 0, z, rot), G()); add(['mountain_A_grass_trees', 'mountain_B_grass', 'mountain_C_grass_trees'][Math.floor(r() * 3)], M(x, 0, z, rot)); break;
@@ -34,6 +34,9 @@ export class MapView {
     }
     this.bounds = { x0, x1, z0, z1 };
     this.bake(parts);
+    const land = [...campaign.grid].filter((g) => g.type !== 'sea');
+    this.water = new Water(this.group, land.map((g) => [g.x, g.z]), { night: campaign.isNight() });
+    this.foliage = new Foliage(this.group, land.filter((g) => ['plains', 'town', 'mine', 'shrine', 'river'].includes(g.type)).map((g) => ({ x: g.x, z: g.z, n: g.type === 'plains' ? 12 : 5 })), r);
     // settlements are live objects so their colours can change hands
     this.sites = new Map();
     // ownership tint and selection
@@ -134,7 +137,8 @@ export class MapView {
 
   select(reg) { this.selMesh.visible = !!reg; if (reg) this.selMesh.position.set(reg.x, 0.08, reg.z); }
 
-  update(dt, time, camera) {
+  update(dt, time, camera, sunDir) {
+    this.water.update(time, sunDir); this.foliage.update(time); this.water.setMood(this.c.isNight());
     for (const m of this.mixers) m.update(dt);
     for (const v of [this.army, ...this.bands.values()]) {
       const g = v.userData.goal; if (!g) continue;
@@ -153,5 +157,5 @@ export class MapView {
     out.push({ army: true, x: (v.x + 1) / 2 * w, y: (1 - v.y) / 2 * h, vis: v.z < 1 });
     return out;
   }
-  dispose() { this.scene.remove(this.group); }
+  dispose() { this.water.dispose(); this.foliage.dispose(); this.scene.remove(this.group); }
 }

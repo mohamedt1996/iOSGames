@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { Post, QUALITY } from './post.js';
-import { skyTexture } from './textures.js';
 import { Assets } from './assets.js';
+import { Sky } from './look.js';
 
 // Renderer, lights, sky and an RTS camera rig shared by the war map and battles.
 export class Stage {
@@ -21,7 +21,7 @@ export class Stage {
     this.post = new Post(r, this.scene, this.camera);
     this.hemi = new THREE.HemisphereLight(0xdfe8ff, 0x5a4a38, 1.1); this.scene.add(this.hemi);
     this.sun = new THREE.DirectionalLight(0xfff0d8, 2.6);
-    this.sun.castShadow = true; this.sun.shadow.bias = -0.0005; this.sun.shadow.normalBias = 0.03;
+    this.sun.castShadow = true; this.sun.shadow.bias = -0.0005; this.sun.shadow.normalBias = 0.03; this.sun.shadow.radius = 2.5;
     this.scene.add(this.sun, this.sun.target);
     this.fill = new THREE.DirectionalLight(0x9ab8ff, 0.5); this.fill.position.set(-20, 15, -10); this.scene.add(this.fill);
     this.clouds = new THREE.Group(); this.scene.add(this.clouds);
@@ -42,8 +42,10 @@ export class Stage {
 
   setMood(night) {
     this.night = night;
-    this.scene.background = skyTexture(night);
-    this.scene.fog = new THREE.Fog(night ? 0x1a2036 : 0xb9cbd8, 45, 120);
+    if (!this.sky) this.sky = new Sky(this.scene);
+    this.sky.setMood(night);
+    this.scene.background = new THREE.Color(night ? 0x141a2c : 0x9fb8c6);
+    this.scene.fog = new THREE.Fog(night ? 0x1c2440 : 0xc3d7e2, 40, 115);
     this.hemi.intensity = night ? 0.45 : 0.75; this.hemi.color.set(night ? 0x8ea0ff : 0xdfe8ff);
     this.sun.intensity = night ? 0.7 : 1.9; this.sun.color.set(night ? 0x9fb4ff : 0xfff6ea);
     this.scene.environmentIntensity = night ? 0.15 : 0.3;
@@ -98,7 +100,8 @@ export class Stage {
     for (const c of this.clouds.children) { c.position.x += c.userData.v * dt; if (c.position.x > (this.cloudSpread || 40) + r.tx) c.position.x = r.tx - (this.cloudSpread || 40); }
   }
 
-  render(dt, time) { this.updateCamera(dt); this.post.render(dt, time, this.night ? 1 : 0); }
+  get sunDir() { return (this._sd ||= new THREE.Vector3()).copy(this.sun.position).sub(this.sun.target.position).normalize(); }
+  render(dt, time) { this.updateCamera(dt); this.sky?.follow(this.camera); this.post.render(dt, time, this.night ? 1 : 0); }
 
   ground(clientX, clientY, objects) {
     const rect = this.renderer.domElement.getBoundingClientRect();

@@ -186,7 +186,7 @@ export class CampaignScreen {
   }
 
   step(dt, time) {
-    this.view.update(dt, time, this.app.stage.camera);
+    this.view.update(dt, time, this.app.stage.camera, this.app.stage.sunDir);
     this.air.update(dt, time);
     const w = innerWidth, h = innerHeight;
     const labels = this.view.project(this.app.stage.camera, w, h);

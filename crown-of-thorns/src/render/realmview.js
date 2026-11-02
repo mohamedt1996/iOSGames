@@ -5,7 +5,7 @@ import { cardBack, cardFace } from './cardtex.js';
 import { toWorld, dist } from '../core/hex.js';
 import { mulberry32 } from '../core/rng.js';
 import { HOUSES } from '../game/realm.js';
-import { bakeParts, grassTint, blobShadow, Atmosphere } from './look.js';
+import { bakeParts, grassTint, blobShadow, Atmosphere, Water, Foliage } from './look.js';
 
 const M = (x, y, z, ry = 0, s = 1) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, 0)), new THREE.Vector3(s, s, s));
 const SHOW = { knight: ['1H_Sword', 'Round_Shield'], barbarian: ['2H_Axe'], rogue: ['2H_Crossbow'], mage: ['2H_Staff'], rogue_hooded: ['Knife', 'Knife_Offhand'] };
@@ -26,7 +26,7 @@ export class RealmView {
     this.group = new THREE.Group(); scene.add(this.group);
     const parts = [], add = (n, m, tint) => { for (const p of Assets.bakedGeometries(n, m)) parts.push({ ...p, tint }); };
     const rand = mulberry32(realm.cfg.seed ?? 3);
-    let R = 0;
+    let R = 0; this.farLand = [];
     for (const p of realm.provinces) {
       const [x, z] = toWorld(p.q, p.r); p.x = x; p.z = z; R = Math.max(R, dist([0, 0], [p.q, p.r]));
       const rot = Math.floor(rand() * 6) * Math.PI / 3;
@@ -42,11 +42,12 @@ export class RealmView {
       const d = dist([0, 0], [q, r]); if (d > R + 5) continue;
       const cell = realm.grid.get(q, r); if (cell?.land) continue;
       const [x, z] = toWorld(q, r);
-      add('hex_water', M(x, 0, z));
-      if (d >= R + 4) { add('hex_grass', M(x, 0, z), grassTint(rand).map((v) => v * 0.85)); add(rand() < 0.5 ? 'mountain_A_grass_trees' : 'hills_A_trees', M(x, 0, z, rand() * 6, 0.9)); }
-      else if (rand() < 0.04) add('waterlily_A', M(x, 0, z, rand() * 6));
+      if (d >= R + 4) { this.farLand.push([x, z]); add('hex_grass', M(x, 0, z), grassTint(rand).map((v) => v * 0.85)); add(rand() < 0.5 ? 'mountain_A_grass_trees' : 'hills_A_trees', M(x, 0, z, rand() * 6, 0.9)); }
+      else if (rand() < 0.04) add('waterlily_A', M(x, -0.17, z, rand() * 6));
     }
     this.bake(parts);
+    this.water = new Water(this.group, [...realm.provinces.map((p) => [p.x, p.z]), ...this.farLand]);
+    this.foliage = new Foliage(this.group, realm.provinces.filter((p) => ['plain', 'farm', 'forest', 'town', 'mine', 'castle'].includes(p.type)).map((p) => ({ x: p.x, z: p.z, n: p.type === 'plain' ? 11 : p.type === 'forest' ? 6 : 4, radius: p.type === 'plain' ? 0.9 : 0.95 })), rand);
     // outline ring geometry
     const sh = new THREE.Shape(), hole = new THREE.Path();
     for (let i = 0; i < 6; i++) { const a = Math.PI / 6 + i * Math.PI / 3; const o = [Math.cos(a) * 1.13, Math.sin(a) * 1.13], n = [Math.cos(a) * 0.98, Math.sin(a) * 0.98]; i ? sh.lineTo(...o) : sh.moveTo(...o); i ? hole.lineTo(...n) : hole.moveTo(...n); }
@@ -191,7 +192,8 @@ export class RealmView {
   clash(pid) { const p = this.r.prov(pid); this.burst(p.x, 0.6, p.z, 60, [2.4, 1.5, 0.6], 4, 0.6, 0.12); this.burst(p.x, 0.2, p.z, 24, [0.5, 0.45, 0.4], 1.6, 1.2, 0.3, this.dust); }
   sparkle(pid, col) { const p = this.r.prov(pid); this.burst(p.x, 0.8, p.z, 40, col, 2, 1, 0.1); }
 
-  update(dt, time) {
+  update(dt, time, sunDir) {
+    this.water.update(time, sunDir); this.foliage.update(time);
     for (const m of this.mixers) m.update(dt);
     for (const t of this.tokens.values()) {
       const age = time - t.t0;
@@ -228,5 +230,5 @@ export class RealmView {
     return out;
   }
   setScale(px) { for (const p of [this.fx, this.dust, this.glints]) p.mat.uniforms.scale.value = px * 0.5; this.air.setScale(px); }
-  dispose() { this.scene.remove(this.group); this.mixers.clear(); }
+  dispose() { this.water.dispose(); this.foliage.dispose(); this.scene.remove(this.group); this.mixers.clear(); }
 }

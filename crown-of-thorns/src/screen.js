@@ -351,7 +351,7 @@ export class GameScreen {
   }
 
   step(dt, time) {
-    this.view.update(dt, time);
+    this.view.update(dt, time, this.app.stage.sunDir);
     const w = innerWidth, h = innerHeight;
     const L = this.hud.querySelector('.labels');
     const items = this.view.project(this.app.stage.camera, w, h);

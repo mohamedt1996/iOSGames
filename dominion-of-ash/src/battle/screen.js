@@ -335,7 +335,7 @@ export class BattleScreen {
     const hideAsh = this.phase === 'deploy' && !this.o.perks?.includes('scouts');
     this.views.sync(b, this.phase === 'fight' && !this.paused ? dt * this.speed * (this.slowmo ? 0.35 : 1) * (this.cine > 0 ? 0.3 : 1) : dt * 0.5, this.stage.camera, this.selected);
     for (const v of this.views.views.values()) if (v.u.side === 'ash') v.root.visible = !hideAsh && !(v.deadT > 14);
-    this.world.sync(b);
+    this.world.sync(b); this.world.animate(time, this.stage.sunDir);
     this.air.update(dt, time);
     this.fx.update(b, dt * (this.phase === 'fight' && !this.paused ? this.speed : 0.2), time);
     if (this.fx.shake) { this.stage.rig.shake = Math.max(this.stage.rig.shake, this.fx.shake); this.fx.shake = 0; }
