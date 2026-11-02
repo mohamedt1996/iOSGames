@@ -1,0 +1,9 @@
+{
+  "appId": "com.mohamedt1996.crownofthorns",
+  "appName": "Crown of Thorns",
+  "webDir": "dist",
+  "ios": { "contentInset": "never", "backgroundColor": "#17120e", "scrollEnabled": false },
+  "plugins": {
+    "SplashScreen": { "launchShowDuration": 600, "backgroundColor": "#17120e", "showSpinner": false }
+  }
+}
