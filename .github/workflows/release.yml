@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to release (created if missing), e.g. v1.0.0
+        required: true
+      signed:
+        description: Sign with the certificate in repo secrets (needs IOS_* secrets)
+        type: boolean
+        default: false
+      prerelease:
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    uses: ./.github/workflows/build-ios.yml
+    with:
+      game: all
+      signed: ${{ inputs.signed || false }}
+      version: ${{ inputs.tag || github.ref_name }}
+    secrets: inherit
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: '*-ipa-*'
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums and notes
+        run: |
+          cd dist
+          ls -la
+          sha256sum *.ipa > SHA256SUMS.txt
+          cat > ../notes.md <<EOF
+          ## Builds
+          $(for f in *.ipa; do printf -- '- `%s` (%s)\n' "$f" "$(du -h "$f" | cut -f1)"; done)
+
+          Unsigned IPAs must be signed before installing (Sideloadly or AltStore with your Apple ID).
+          Signed builds are produced when the release is run with **signed** and the IOS_* secrets are set.
+
+          Models: KayKit packs by Kay Lousberg (CC0).
+          EOF
+          sed -i 's/^          //' ../notes.md
+
+      - name: Publish release
+        run: |
+          PRE=""; [ "${{ inputs.prerelease }}" = "true" ] && PRE="--prerelease"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.ipa dist/SHA256SUMS.txt --clobber
+          else
+            gh release create "$TAG" dist/*.ipa dist/SHA256SUMS.txt \
+              --target "$GITHUB_SHA" --title "iOSGames $TAG" \
+              --notes-file notes.md --generate-notes $PRE
+          fi

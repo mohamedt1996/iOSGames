@@ -12,6 +12,11 @@ on:
         description: Sign with the certificate in repo secrets (needs IOS_* secrets)
         type: boolean
         default: false
+  workflow_call:
+    inputs:
+      game: { type: string, default: all }
+      signed: { type: boolean, default: false }
+      version: { type: string, default: '' }
   push:
     branches: [main]
     paths:
@@ -91,6 +96,13 @@ jobs:
         run: |
           cd ios/App
           sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9]*;/CURRENT_PROJECT_VERSION = ${{ github.run_number }};/g" App.xcodeproj/project.pbxproj
+          V="${VERSION#v}"
+          if echo "$V" | grep -qE '^[0-9]+(\.[0-9]+){0,2}$'; then
+            sed -i '' "s/MARKETING_VERSION = [0-9.]*;/MARKETING_VERSION = $V;/g" App.xcodeproj/project.pbxproj
+            echo "Version $V"
+          fi
+        env:
+          VERSION: ${{ inputs.version }}
 
       - name: Archive (unsigned)
         if: env.SIGN != 'true'
