@@ -38,15 +38,16 @@ jobs:
           INPUT: ${{ inputs.game }}
           BEFORE: ${{ github.event.before }}
         run: |
-          ALL=$(ls -d */ | tr -d / | while read d; do [ -d "$d/ios" ] && echo "$d"; done)
+          set +e
+          ALL=""; for d in */; do d=${d%/}; if [ -d "$d/ios" ]; then ALL="$ALL $d"; fi; done
           if [ -n "$INPUT" ] && [ "$INPUT" != "all" ]; then SEL="$INPUT"
           elif [ -n "$INPUT" ]; then SEL="$ALL"
           else
-            CHANGED=$(git diff --name-only "$BEFORE" "$GITHUB_SHA" 2>/dev/null || echo ALL)
-            if echo "$CHANGED" | grep -qE '^(ALL|shared-assets/|\.github/)'; then SEL="$ALL"
-            else SEL=$(for d in $ALL; do echo "$CHANGED" | grep -q "^$d/" && echo "$d"; done); fi
+            CHANGED=$(git diff --name-only "$BEFORE" "$GITHUB_SHA" 2>/dev/null)
+            if [ -z "$CHANGED" ] || echo "$CHANGED" | grep -qE '^(shared-assets/|\.github/)'; then SEL="$ALL"
+            else SEL=""; for d in $ALL; do if echo "$CHANGED" | grep -q "^$d/"; then SEL="$SEL $d"; fi; done; fi
           fi
-          JSON=$(printf '%s\n' $SEL | grep -v '^$' | jq -R . | jq -cs .)
+          JSON=$(for d in $SEL; do echo "$d"; done | jq -R . | jq -cs .)
           echo "games=$JSON" >> "$GITHUB_OUTPUT"; echo "Building: $JSON"
 
   test:
