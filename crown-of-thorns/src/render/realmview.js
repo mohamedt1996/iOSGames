@@ -1,27 +1,36 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Assets } from './assets.js';
 import { Particles } from './particles.js';
 import { cardBack, cardFace } from './cardtex.js';
 import { toWorld, dist } from '../core/hex.js';
 import { mulberry32 } from '../core/rng.js';
 import { HOUSES } from '../game/realm.js';
+import { bakeParts, grassTint, blobShadow, Atmosphere } from './look.js';
 
 const M = (x, y, z, ry = 0, s = 1) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, 0)), new THREE.Vector3(s, s, s));
 const SHOW = { knight: ['1H_Sword', 'Round_Shield'], barbarian: ['2H_Axe'], rogue: ['2H_Crossbow'], mage: ['2H_Staff'], rogue_hooded: ['Knife', 'Knife_Offhand'] };
 
 // The kingdom on the table: baked land, coloured holdings, soldiers, face-down cards and threat arrows.
+let dashTex = null;
+function dashTexture() {
+  if (dashTex) return dashTex;
+  const c = document.createElement('canvas'); c.width = 64; c.height = 8; const g = c.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, 64, 0); grd.addColorStop(0, 'rgba(255,255,255,0.25)'); grd.addColorStop(0.55, 'rgba(255,255,255,1)'); grd.addColorStop(0.7, 'rgba(255,255,255,0.25)'); grd.addColorStop(1, 'rgba(255,255,255,0.25)');
+  g.fillStyle = grd; g.fillRect(0, 0, 64, 8);
+  dashTex = new THREE.CanvasTexture(c); dashTex.wrapS = THREE.RepeatWrapping; return dashTex;
+}
+
 export class RealmView {
   constructor(scene, realm) {
     this.scene = scene; this.r = realm;
     this.group = new THREE.Group(); scene.add(this.group);
-    const parts = [], add = (n, m) => parts.push(...Assets.bakedGeometries(n, m));
+    const parts = [], add = (n, m, tint) => { for (const p of Assets.bakedGeometries(n, m)) parts.push({ ...p, tint }); };
     const rand = mulberry32(realm.cfg.seed ?? 3);
     let R = 0;
     for (const p of realm.provinces) {
       const [x, z] = toWorld(p.q, p.r); p.x = x; p.z = z; R = Math.max(R, dist([0, 0], [p.q, p.r]));
       const rot = Math.floor(rand() * 6) * Math.PI / 3;
-      add('hex_grass', M(x, 0, z, rot));
+      add('hex_grass', M(x, 0, z, rot), p.type === 'farm' ? grassTint(rand).map((v, i) => v * [1.08, 1.0, 0.85][i]) : grassTint(rand));
       if (p.type === 'forest') { add(['trees_A_large', 'trees_B_large', 'trees_A_medium'][Math.floor(rand() * 3)], M(x + 0.3, 0, z - 0.2, rot, 0.9)); add('trees_B_small', M(x - 0.5, 0, z + 0.4, rot, 0.8)); }
       else if (p.type === 'hills') add(['hills_A_trees', 'hills_B', 'hills_C_trees'][Math.floor(rand() * 3)], M(x, 0, z, rot, 0.95));
       else if (p.type === 'farm') { add('building_grain', M(x + 0.45, 0, z + 0.35, rot, 0.9)); add('building_grain', M(x - 0.5, 0, z - 0.3, rot + 1, 0.8)); }
@@ -34,7 +43,7 @@ export class RealmView {
       const cell = realm.grid.get(q, r); if (cell?.land) continue;
       const [x, z] = toWorld(q, r);
       add('hex_water', M(x, 0, z));
-      if (d >= R + 4) { add('hex_grass', M(x, 0, z)); add(rand() < 0.5 ? 'mountain_A_grass_trees' : 'hills_A_trees', M(x, 0, z, rand() * 6, 0.9)); }
+      if (d >= R + 4) { add('hex_grass', M(x, 0, z), grassTint(rand).map((v) => v * 0.85)); add(rand() < 0.5 ? 'mountain_A_grass_trees' : 'hills_A_trees', M(x, 0, z, rand() * 6, 0.9)); }
       else if (rand() < 0.04) add('waterlily_A', M(x, 0, z, rand() * 6));
     }
     this.bake(parts);
@@ -58,19 +67,15 @@ export class RealmView {
     this.fx = new Particles(this.group, { max: 700, additive: true, gravity: 0.8, drag: 1.2 });
     this.dust = new Particles(this.group, { max: 300, additive: false, gravity: -0.6, drag: 2 });
     this.anims = [];
+    const B = R * 1.8 + 2;
+    this.air = new Atmosphere(this.group, { x0: -B, x1: B, z0: -B, z1: B }, 'day');
+    this.glints = new Particles(this.group, { max: 140, additive: true, gravity: 0, drag: 0 });
+    this.sea = [];
+    for (let q = -R - 4; q <= R + 4; q++) for (let r = -R - 4; r <= R + 4; r++) { const d = dist([0, 0], [q, r]); const c = realm.grid.get(q, r); if (d <= R + 3 && !c?.land) this.sea.push(toWorld(q, r)); }
     this.sync();
   }
 
-  bake(parts) {
-    const by = new Map();
-    for (const p of parts) { const k = p.material.uuid; if (!by.has(k)) by.set(k, { mat: p.material, g: [] }); by.get(k).g.push(p.geometry); }
-    this.ground = [];
-    for (const { mat, g } of by.values()) {
-      const norm = g.map((x) => { const y = x.index ? x.toNonIndexed() : x; for (const a of Object.keys(y.attributes)) if (!['position', 'normal', 'uv'].includes(a)) y.deleteAttribute(a); return y; });
-      const merged = mergeGeometries(norm, false); if (!merged) continue;
-      const mesh = new THREE.Mesh(merged, mat); mesh.receiveShadow = mesh.castShadow = true; this.group.add(mesh); this.ground.push(mesh);
-    }
-  }
+  bake(parts) { this.ground = bakeParts(parts, this.group); }
 
   kitColor(owner) { return owner ? HOUSES[owner].kit : null; }
   site(p) {
@@ -100,6 +105,7 @@ export class RealmView {
     const a = c.actions.Idle_Combat || c.actions.Idle; a?.play(); if (a) a.time = Math.random() * 2;
     this.mixers.add(c.mixer);
     c.root.userData.c = c;
+    const blob = blobShadow(2.6, 0.45); c.root.add(blob);
     return c.root;
   }
 
@@ -150,8 +156,10 @@ export class RealmView {
       const a = new THREE.Vector3(s.x, 0.3, s.z), b = new THREE.Vector3(t.x, 0.3, t.z);
       const mid = a.clone().add(b).multiplyScalar(0.5); mid.y = 1.2 + a.distanceTo(b) * 0.15;
       const curve = new THREE.QuadraticBezierCurve3(a, mid, b.clone().lerp(a, 0.12));
-      const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.06, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(HOUSES[pl.house].color).multiplyScalar(1.4), transparent: true, opacity: 0.9 }));
-      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.36, 8), tube.material);
+      const tex = dashTexture().clone(); tex.needsUpdate = true; tex.repeat.set(Math.max(2, a.distanceTo(b) * 1.6), 1);
+      const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 32, 0.07, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(HOUSES[pl.house].color).multiplyScalar(1.6), map: tex, transparent: true, opacity: 0.95, depthWrite: false }));
+      tube.userData.tex = tex;
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.4, 10), new THREE.MeshBasicMaterial({ color: new THREE.Color(HOUSES[pl.house].color).multiplyScalar(1.6), transparent: true }));
       const end = curve.getPoint(1), before = curve.getPoint(0.94);
       tip.position.copy(end); tip.lookAt(end.clone().add(end.clone().sub(before))); tip.rotateX(Math.PI / 2);
       this.group.add(tube, tip); tok.arrow = [tube, tip];
@@ -193,6 +201,7 @@ export class RealmView {
       t.card.rotation.z = t.flip * Math.PI;
       t.g.rotation.y = Math.sin(age * 0.7 + t.pl.idx) * 0.15;
       if (t.peek) { t.peek = Math.max(0, t.peek - dt * 0.3); t.card.material[2].emissive = new THREE.Color(0x6a5aff).multiplyScalar(t.peek * 0.6); }
+      if (t.arrow) t.arrow[0].userData.tex.offset.x = -age * 1.2;
       if (t.arrow) t.arrow[0].material.opacity = t.flip >= 1 && t.pl.card === 'feint' ? Math.max(0.15, 0.9 - (t.flip - 0) * 0.6) : 0.85 + Math.sin(age * 4) * 0.1;
     }
     this.anims = this.anims.filter((a) => {
@@ -204,6 +213,9 @@ export class RealmView {
     });
     for (const v of this.prov.values()) if (v.hl.userData.on) v.hl.material.opacity = 0.28 + Math.sin(time * 4) * 0.12;
     this.fx.update(dt); this.dust.update(dt);
+    this.air.update(dt, time);
+    if (this.sea.length && Math.random() < dt * 30) { const [x, z] = this.sea[Math.floor(Math.random() * this.sea.length)]; this.glints.emit(x + (Math.random() - 0.5) * 1.6, 0.12, z + (Math.random() - 0.5) * 1.6, 0, 0, 0, 0.8 + Math.random() * 0.6, 1.6, 1.7, 1.8, 0.9, 0.06 + Math.random() * 0.05); }
+    this.glints.update(dt);
   }
 
   pick(point) {
@@ -215,6 +227,6 @@ export class RealmView {
     for (const p of this.r.provinces) { v.set(p.x, 0.15, p.z + 0.55); v.project(camera); out.push({ p, x: (v.x + 1) / 2 * w, y: (1 - v.y) / 2 * h, vis: v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 }); }
     return out;
   }
-  setScale(px) { this.fx.mat.uniforms.scale.value = px * 0.5; this.dust.mat.uniforms.scale.value = px * 0.5; }
+  setScale(px) { for (const p of [this.fx, this.dust, this.glints]) p.mat.uniforms.scale.value = px * 0.5; this.air.setScale(px); }
   dispose() { this.scene.remove(this.group); this.mixers.clear(); }
 }

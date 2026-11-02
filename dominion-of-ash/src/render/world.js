@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Assets } from './assets.js';
 import { offsetToAxial, toWorld } from '../core/hex.js';
 import { COLS, ROWS, TERRAIN } from '../battle/maps.js';
 import { mulberry32 } from '../core/rng.js';
+import { bakeParts, grassTint } from './look.js';
 
 export const HILL_Y = 0.55;
 const M = (x, y, z, ry = 0, s = 1) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, 0)), new THREE.Vector3(s, s, s));
@@ -17,7 +17,8 @@ export class BattleWorld {
     this.rand = mulberry32(field.recipe?.seed ?? 5);
     this.trees = new Map(); this.burnMarks = new Map();
     const parts = [];
-    const add = (name, m) => parts.push(...Assets.bakedGeometries(name, m));
+    const add = (name, m, tint) => { for (const p of Assets.bakedGeometries(name, m)) parts.push({ ...p, tint }); };
+    const G = () => grassTint(r);
     const r = this.rand;
     for (const c of field.grid) {
       const rot = Math.floor(r() * 6) * (Math.PI / 3);
@@ -26,12 +27,12 @@ export class BattleWorld {
         case 'water': add('hex_water', M(c.x, 0, c.z)); break;
         case 'river': add('hex_river_crossing_A', M(c.x, 0, c.z, Math.PI / 6)); break;
         case 'bridge': add('hex_river_A', M(c.x, 0, c.z, Math.PI / 2)); add('building_bridge_A', M(c.x, 0, c.z, Math.PI / 2)); break;
-        case 'hill': add('hex_grass', M(c.x, y, c.z, rot)); add('hex_grass_bottom', M(c.x, y - 0.5, c.z, rot)); add(r() < 0.5 ? 'rock_single_A' : 'rock_single_C', M(c.x + (r() - 0.5), y, c.z + (r() - 0.5), rot, 0.6)); break;
-        case 'mountain': add('hex_grass', M(c.x, 0, c.z, rot)); add(r() < 0.5 ? 'mountain_A_grass_trees' : 'mountain_B_grass', M(c.x, 0, c.z, rot)); break;
-        case 'town': add('hex_grass', M(c.x, 0, c.z, rot)); add(r() < 0.5 ? 'building_home_A_yellow' : 'building_home_B_yellow', M(c.x + 0.25, 0, c.z - 0.3, rot, 0.85)); add('barrel', M(c.x - 0.55, 0, c.z + 0.4, rot, 0.8)); break;
-        case 'ruin': add('hex_grass', M(c.x, 0, c.z, rot)); add('building_destroyed', M(c.x, 0, c.z, rot, 0.85)); break;
+        case 'hill': add('hex_grass', M(c.x, y, c.z, rot), G()); add('hex_grass_bottom', M(c.x, y - 0.5, c.z, rot)); add(r() < 0.5 ? 'rock_single_A' : 'rock_single_C', M(c.x + (r() - 0.5), y, c.z + (r() - 0.5), rot, 0.6)); break;
+        case 'mountain': add('hex_grass', M(c.x, 0, c.z, rot), G()); add(r() < 0.5 ? 'mountain_A_grass_trees' : 'mountain_B_grass', M(c.x, 0, c.z, rot)); break;
+        case 'town': add('hex_grass', M(c.x, 0, c.z, rot), G()); add(r() < 0.5 ? 'building_home_A_yellow' : 'building_home_B_yellow', M(c.x + 0.25, 0, c.z - 0.3, rot, 0.85)); add('barrel', M(c.x - 0.55, 0, c.z + 0.4, rot, 0.8)); break;
+        case 'ruin': add('hex_grass', M(c.x, 0, c.z, rot), G()); add('building_destroyed', M(c.x, 0, c.z, rot, 0.85)); break;
         case 'road': add('hex_road_A', M(c.x, 0, c.z, Math.PI / 6)); break;
-        default: add('hex_grass', M(c.x, 0, c.z, rot));
+        default: add('hex_grass', M(c.x, 0, c.z, rot), G());
       }
       if (c.type === 'forest') this.plantForest(c);
       else if (c.type === 'grass' && r() < 0.12) add(['rock_single_D', 'rock_single_E', 'tree_single_A_cut'][Math.floor(r() * 3)], M(c.x + (r() - 0.5) * 1.2, 0, c.z + (r() - 0.5) * 1.2, rot, 0.7));
@@ -90,7 +91,7 @@ export class BattleWorld {
       const ring = Math.max(-row, row - ROWS + 1, -col, col - COLS + 1);
       const rot = Math.floor(r() * 6) * (Math.PI / 3);
       if (ring >= 3) { add('hex_water', M(x, 0, z)); continue; }
-      add('hex_grass', M(x, 0, z, rot));
+      add('hex_grass', M(x, 0, z, rot), grassTint(r).map((v) => v * 0.92));
       const k = r();
       if (ring >= 2 || k < 0.35) add(['mountain_A_grass_trees', 'mountain_B_grass_trees', 'mountain_C_grass', 'hills_A_trees', 'hills_B_trees'][Math.floor(r() * 5)], M(x, 0, z, rot));
       else if (k < 0.8) add(['trees_A_large', 'trees_B_large', 'trees_A_medium'][Math.floor(r() * 3)], M(x, 0, z, rot));
@@ -100,18 +101,7 @@ export class BattleWorld {
     add('building_watermill_yellow', M(...toWorld(...offsetToAxial(COLS + 1, 11)).flatMap((v, i) => (i ? [0, v] : [v])), 2.1));
   }
 
-  bake(parts) {
-    const byMat = new Map();
-    for (const p of parts) { const k = p.material.uuid; if (!byMat.has(k)) byMat.set(k, { mat: p.material, geos: [] }); byMat.get(k).geos.push(p.geometry); }
-    for (const { mat, geos } of byMat.values()) {
-      const norm = geos.map((g) => { const x = g.index ? g.toNonIndexed() : g; for (const a of Object.keys(x.attributes)) if (!['position', 'normal', 'uv'].includes(a)) x.deleteAttribute(a); return x; });
-      const merged = mergeGeometries(norm, false);
-      if (!merged) continue;
-      const mesh = new THREE.Mesh(merged, mat); mesh.receiveShadow = true; mesh.castShadow = true; mesh.name = 'terrain';
-      this.group.add(mesh);
-      (this.terrainMeshes ||= []).push(mesh);
-    }
-  }
+  bake(parts) { this.terrainMeshes = bakeParts(parts, this.group); }
 
   // fire and banner state from the battle each frame
   sync(battle) {
@@ -131,5 +121,5 @@ export class BattleWorld {
     for (const k in this.flags) this.flags[k].visible = k === lead;
   }
 
-  dispose() { this.scene.remove(this.group); this.group.traverse((o) => { if (o.geometry && o.name === 'terrain') o.geometry.dispose(); }); }
+  dispose() { this.scene.remove(this.group); this.group.traverse((o) => { if (o.geometry && o.name === 'terrain') { o.geometry.dispose(); if (o.material.vertexColors) o.material.dispose(); } }); }
 }

@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Assets } from '../render/assets.js';
 import { ringTexture } from '../render/textures.js';
 import { mulberry32 } from '../core/rng.js';
 import { toWorld } from '../core/hex.js';
+import { bakeParts, grassTint, blobShadow } from '../render/look.js';
 
 const M = (x, y, z, ry = 0, s = 1) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, 0)), new THREE.Vector3(s, s, s));
 const COLOR = { ember: 'blue', ash: 'red', null: 'yellow' };
@@ -14,8 +14,9 @@ export class MapView {
   constructor(scene, campaign) {
     this.scene = scene; this.c = campaign;
     this.group = new THREE.Group(); scene.add(this.group);
-    const parts = [], add = (n, m) => parts.push(...Assets.bakedGeometries(n, m));
+    const parts = [], add = (n, m, tint) => { for (const p of Assets.bakedGeometries(n, m)) parts.push({ ...p, tint }); };
     const r = mulberry32(campaign.s.seed);
+    const G = () => grassTint(r);
     let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
     for (const reg of campaign.grid) {
       const [x, z] = toWorld(reg.q, reg.r); reg.x = x; reg.z = z;
@@ -23,12 +24,12 @@ export class MapView {
       if (reg.type !== 'sea') { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
       switch (reg.type) {
         case 'sea': add('hex_water', M(x, 0, z)); if (r() < 0.08) add('waterlily_A', M(x, 0, z, rot)); break;
-        case 'forest': add('hex_grass', M(x, 0, z, rot)); add(['trees_A_large', 'trees_B_large', 'trees_A_medium'][Math.floor(r() * 3)], M(x, 0, z, rot)); break;
-        case 'hills': add('hex_grass', M(x, 0, z, rot)); add(['hills_A_trees', 'hills_B', 'hills_C_trees'][Math.floor(r() * 3)], M(x, 0, z, rot)); break;
-        case 'mountain': add('hex_grass', M(x, 0, z, rot)); add(['mountain_A_grass_trees', 'mountain_B_grass', 'mountain_C_grass_trees'][Math.floor(r() * 3)], M(x, 0, z, rot)); break;
+        case 'forest': add('hex_grass', M(x, 0, z, rot), G()); add(['trees_A_large', 'trees_B_large', 'trees_A_medium'][Math.floor(r() * 3)], M(x, 0, z, rot)); break;
+        case 'hills': add('hex_grass', M(x, 0, z, rot), G()); add(['hills_A_trees', 'hills_B', 'hills_C_trees'][Math.floor(r() * 3)], M(x, 0, z, rot)); break;
+        case 'mountain': add('hex_grass', M(x, 0, z, rot), G()); add(['mountain_A_grass_trees', 'mountain_B_grass', 'mountain_C_grass_trees'][Math.floor(r() * 3)], M(x, 0, z, rot)); break;
         case 'river': add('hex_river_crossing_A', M(x, 0, z, Math.PI / 6)); break;
         case 'marsh': add('hex_river_crossing_B', M(x, 0, z, rot)); add('waterplant_A', M(x + 0.4, 0, z, rot)); add('waterlily_B', M(x - 0.3, 0, z + 0.3, rot)); break;
-        default: add('hex_grass', M(x, 0, z, rot)); if (reg.type === 'plains' && r() < 0.5) add(['tree_single_A', 'rock_single_B', 'building_grain', 'tree_single_B'][Math.floor(r() * 4)], M(x + (r() - 0.5), 0, z + (r() - 0.5), rot, 0.8));
+        default: add('hex_grass', M(x, 0, z, rot), G()); if (reg.type === 'plains' && r() < 0.5) add(['tree_single_A', 'rock_single_B', 'building_grain', 'tree_single_B'][Math.floor(r() * 4)], M(x + (r() - 0.5), 0, z + (r() - 0.5), rot, 0.8));
       }
     }
     this.bounds = { x0, x1, z0, z1 };
@@ -56,23 +57,14 @@ export class MapView {
     this.sync();
   }
 
-  bake(parts) {
-    const by = new Map();
-    for (const p of parts) { const k = p.material.uuid; if (!by.has(k)) by.set(k, { mat: p.material, g: [] }); by.get(k).g.push(p.geometry); }
-    for (const { mat, g } of by.values()) {
-      const norm = g.map((x) => { const y = x.index ? x.toNonIndexed() : x; for (const a of Object.keys(y.attributes)) if (!['position', 'normal', 'uv'].includes(a)) y.deleteAttribute(a); return y; });
-      const merged = mergeGeometries(norm, false); if (!merged) continue;
-      const mesh = new THREE.Mesh(merged, mat); mesh.receiveShadow = mesh.castShadow = true; this.group.add(mesh);
-      (this.ground ||= []).push(mesh);
-    }
-  }
+  bake(parts) { this.ground = bakeParts(parts, this.group); }
 
   figure(model, flag, scale, show) {
     const g = new THREE.Group();
     const c = Assets.character(model);
     c.root.scale.setScalar(scale);
     c.root.traverse((o) => { if (o.parent && /handslot/.test(o.parent.name)) o.visible = show[0].includes(o.name); if (o.isMesh && /Eyes/.test(o.name) && /skeleton/.test(model)) { o.material.emissive = new THREE.Color(0x7bff9a); o.material.emissiveIntensity = 2.5; } });
-    g.add(c.root);
+    g.add(c.root); g.add(blobShadow(1.1));
     const a = c.actions.Idle_Combat || c.actions.Idle; a?.play();
     const f = Assets.prop(flag); f.position.set(-0.45, 0, -0.2); f.scale.setScalar(0.9); g.add(f);
     const ring = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.6).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: RING, color: flag === 'flag_blue' ? 0x6fa8ff : 0xff6a3a, transparent: true, opacity: 0.8, depthWrite: false }));

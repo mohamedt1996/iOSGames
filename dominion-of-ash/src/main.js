@@ -18,6 +18,7 @@ import { UNITS, ROSTER } from './data/units.js';
 import { PLANS } from './ai/tactics.js';
 import { newBrain, skillOf } from './ai/rival.js';
 import { icon, UNIT_ICON } from './ui/icons.js';
+import { Atmosphere } from './render/look.js';
 import { loadSave, saveGame, platformReady, setHaptics, haptic } from './platform.js';
 
 const el = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -35,6 +36,9 @@ class TitleScene {
     const ash = [['ashking', 0, -2.2], ['bonewarden', -1.4, -2.9], ['bonewarden', 1.4, -2.9], ['necromancer', 0, -4.2], ['thrall', -2.6, -3.6], ['thrall', 2.6, -3.6], ['boneshot', -1.2, -4.6]];
     this.battle = new Battle(field, { ember: ember.map(([type, x, z]) => ({ type, x: b.x + x, z: b.z + z })), ash: ash.map(([type, x, z]) => ({ type, x: b.x + x, z: b.z + z })) });
     this.center = b; this.t = 0;
+    this.air = new Atmosphere(this.world.group, { x0: b.x - 14, x1: b.x + 14, z0: b.z - 14, z1: b.z + 14 }, 'night');
+    this.air.setScale(app.stage.renderer.domElement.height);
+    this.embers = new Atmosphere(this.world.group, { x0: b.x - 10, x1: b.x + 10, z0: b.z - 10, z1: b.z + 10 }, 'ash'); this.embers.setScale(app.stage.renderer.domElement.height);
     app.stage.addClouds(30, 8);
     app.stage.rig.bounds = null; app.stage.rig.pitch = 0.42; app.stage.rig.dist = 15; app.stage.rig.minD = 6;
     const sc = app.stage.sun.shadow.camera; sc.left = -16; sc.right = 16; sc.top = 16; sc.bottom = -16; sc.updateProjectionMatrix();
@@ -43,6 +47,7 @@ class TitleScene {
     this.t += dt;
     const r = this.app.stage.rig; r.tx = this.center.x; r.tz = this.center.z; r.yaw = 0.9 + this.t * 0.04; r.dist = 15 + Math.sin(this.t * 0.1) * 1.5;
     this.views.sync(this.battle, dt, this.app.stage.camera, new Set());
+    this.air.update(dt, this.t); this.embers.update(dt, this.t);
   }
   dispose() { this.views.dispose(); this.world.dispose(); const r = this.app.stage.rig; r.pitch = 0.95; r.minD = 9; }
 }

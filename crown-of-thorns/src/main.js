@@ -24,7 +24,7 @@ class TitleScene {
     this.realm = new Realm({ seed: 7, radius: 4, houses: [{ id: 'blue' }, { id: 'red' }, { id: 'green' }, { id: 'yellow' }] });
     for (const p of this.realm.provinces) if (!p.owner && Math.random() < 0.55) { const h = this.realm.houses[Math.floor(Math.random() * 4)]; p.owner = h.id; p.troops = 2 + Math.floor(Math.random() * 8); }
     app.stage.setMood(false);
-    this.view = new RealmView(app.stage.scene, this.realm);
+    this.view = new RealmView(app.stage.scene, this.realm); this.view.setScale(app.stage.renderer.domElement.height);
     app.stage.addClouds(30, 10);
     app.stage.frame({ x0: -14, x1: 14, z0: -14, z1: 14 }, 26);
     const r = app.stage.rig; r.bounds = null; r.tx = 0; r.tz = 0; r.pitch = 0.62; r.dist = 24;

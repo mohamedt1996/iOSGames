@@ -3,6 +3,7 @@ import { MapView } from './mapview.js';
 import { UNITS, ROSTER } from '../data/units.js';
 import { icon, UNIT_ICON } from '../ui/icons.js';
 import { haptic } from '../platform.js';
+import { Atmosphere } from '../render/look.js';
 
 // The war map: move your army, recruit, weather events and answer the Legion.
 export class CampaignScreen {
@@ -12,8 +13,11 @@ export class CampaignScreen {
     st.setMood(this.c.isNight());
     this.view = new MapView(st.scene, this.c);
     st.addClouds(22, 10);
+    const B = this.view.bounds;
+    this.air = new Atmosphere(this.view.group, { x0: B.x0 - 3, x1: B.x1 + 3, z0: B.z0 - 3, z1: B.z1 + 3 }, this.c.isNight() ? 'night' : 'day');
+    this.air.setScale(st.renderer.domElement.height); st.onResize = (px) => this.air.setScale(px);
     st.frame({ x0: this.view.bounds.x0 + 2, x1: this.view.bounds.x1 - 2, z0: this.view.bounds.z0 + 1, z1: this.view.bounds.z1 - 3 }, 20);
-    const ar = this.c.armyRegion(); st.rig.tx = ar.x; st.rig.tz = ar.z + 2; st.rig.yaw = 0; st.rig.minD = 8; st.rig.maxD = 34;
+    const ar = this.c.armyRegion(); st.rig.tx = ar.x; st.rig.tz = ar.z - 1.5; st.rig.dist = 17; st.rig.yaw = 0; st.rig.minD = 8; st.rig.maxD = 34;
     this.build(); this.bindInput(); this.refresh();
     this.queueModals();
   }
@@ -43,6 +47,7 @@ export class CampaignScreen {
     this.hud.querySelector('.log').innerHTML = s.log.slice(0, 3).map((l) => `<p>${l}</p>`).join('');
     this.hud.querySelector('.end').disabled = s.over;
     this.app.stage.setMood(c.isNight());
+    if (this.air && this.air.mode !== (c.isNight() ? 'night' : 'day')) this.air.setMode(c.isNight() ? 'night' : 'day');
     this.app.persist();
   }
 
@@ -182,6 +187,7 @@ export class CampaignScreen {
 
   step(dt, time) {
     this.view.update(dt, time, this.app.stage.camera);
+    this.air.update(dt, time);
     const w = innerWidth, h = innerHeight;
     const labels = this.view.project(this.app.stage.camera, w, h);
     const L = this.hud.querySelector('.labels');
@@ -191,5 +197,5 @@ export class CampaignScreen {
     this.app.audio.update(dt, 0.05, this.c.isNight());
   }
 
-  dispose() { this.unbind?.(); this.hud.remove(); this.view.dispose(); }
+  dispose() { this.unbind?.(); this.hud.remove(); this.view.dispose(); this.app.stage.onResize = null; }
 }

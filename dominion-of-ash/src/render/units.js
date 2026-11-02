@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Assets } from './assets.js';
 import { UNITS, FACTIONS } from '../data/units.js';
 import { ringTexture } from './textures.js';
+import { blobShadow } from './look.js';
 
 const RING = ringTexture();
 const FADE = 0.18;
@@ -20,7 +21,7 @@ export class UnitViews {
     const c = Assets.character(def.model);
     const root = new THREE.Group();
     const S = def.scale * 1.3; c.root.scale.setScalar(S);
-    root.add(c.root);
+    root.add(c.root); root.add(blobShadow(def.hero ? 1.25 : 0.95));
     // weapons: show the named ones; attach skeleton weapons to hand slots
     const lo = def.loadout || {};
     const slots = {};

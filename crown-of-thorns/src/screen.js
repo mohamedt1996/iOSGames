@@ -23,8 +23,8 @@ export class GameScreen {
     st.onResize = (px) => this.view.setScale(px); this.view.setScale(st.renderer.domElement.height);
     st.addClouds(this.view.R * 2.5 + 8, 9);
     const B = this.view.R * 1.8 + 1;
-    st.frame({ x0: -B, x1: B, z0: -B, z1: B }, this.view.R * 6.2 + 6);
-    st.rig.tx = 0; st.rig.tz = 2.5; st.rig.minD = 7; st.rig.maxD = this.view.R * 9 + 10; st.rig.pitch = 1.0; st.rig.yaw = 0;
+    st.frame({ x0: -B, x1: B, z0: -B, z1: B }, this.view.R * 5.2 + 5);
+    st.rig.tx = 0; st.rig.tz = 1.5; st.rig.minD = 7; st.rig.maxD = this.view.R * 9 + 10; st.rig.pitch = 1.0; st.rig.yaw = 0;
     this.sel = null;
     this.build(); this.bindInput();
     this.startRound();

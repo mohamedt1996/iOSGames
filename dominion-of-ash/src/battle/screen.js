@@ -9,6 +9,7 @@ import { FX } from '../render/fx.js';
 import { UNITS } from '../data/units.js';
 import { icon, UNIT_ICON } from '../ui/icons.js';
 import { haptic } from '../platform.js';
+import { Atmosphere } from '../render/look.js';
 
 const FORMATIONS = {
   line: { name: 'Battle line', lanes: { melee: 'center', ranged: 'center', caster: 'center', flanker: 'center', hero: 'center' } },
@@ -28,12 +29,14 @@ export class BattleScreen {
     this.world = new BattleWorld(this.stage.scene, this.field);
     this.views = new UnitViews(this.stage.scene, this.world);
     this.fx = new FX(this.stage.scene, this.world);
-    this.stage.onResize = (px) => this.fx.setScale(px);
+    this.stage.onResize = (px) => { this.fx.setScale(px); this.air?.setScale(px); };
     this.fx.setScale(this.stage.renderer.domElement.height);
     this.stage.addClouds(28, 8);
     let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
     for (const c of this.field.grid) { x0 = Math.min(x0, c.x); x1 = Math.max(x1, c.x); z0 = Math.min(z0, c.z); z1 = Math.max(z1, c.z); }
     this.bounds = { x0, x1, z0, z1 };
+    this.air = new Atmosphere(this.world.group, { x0: x0 - 4, x1: x1 + 4, z0: z0 - 4, z1: z1 + 2 }, this.field.night ? 'night' : 'ash');
+    this.air.setScale(this.stage.renderer.domElement.height);
     this.stage.frame(this.bounds, 24);
     this.stage.rig.yaw = 0; this.stage.rig.tz = z0 + 4; this.stage.rig.dist = 30;
     this.camGoal = { tz: z1 - 1.5, dist: 17, t: 0 };
@@ -333,6 +336,7 @@ export class BattleScreen {
     this.views.sync(b, this.phase === 'fight' && !this.paused ? dt * this.speed * (this.slowmo ? 0.35 : 1) * (this.cine > 0 ? 0.3 : 1) : dt * 0.5, this.stage.camera, this.selected);
     for (const v of this.views.views.values()) if (v.u.side === 'ash') v.root.visible = !hideAsh && !(v.deadT > 14);
     this.world.sync(b);
+    this.air.update(dt, time);
     this.fx.update(b, dt * (this.phase === 'fight' && !this.paused ? this.speed : 0.2), time);
     if (this.fx.shake) { this.stage.rig.shake = Math.max(this.stage.rig.shake, this.fx.shake); this.fx.shake = 0; }
     this.updateHud();

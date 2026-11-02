@@ -94,7 +94,7 @@ export class Stage {
     this.camera.position.set(r.tx + Math.sin(r.yaw) * Math.cos(pitch) * r.dist + jx, Math.sin(pitch) * r.dist, r.tz + Math.cos(r.yaw) * Math.cos(pitch) * r.dist + jz);
     this.camera.lookAt(r.tx, 0, r.tz);
     // sun follows the view so shadows stay crisp where you look
-    this.sun.position.set(r.tx + 18, 30, r.tz + 10); this.sun.target.position.set(r.tx, 0, r.tz);
+    this.sun.position.set(r.tx + 22, 23, r.tz + 13); this.sun.target.position.set(r.tx, 0, r.tz);
     for (const c of this.clouds.children) { c.position.x += c.userData.v * dt; if (c.position.x > (this.cloudSpread || 40) + r.tx) c.position.x = r.tx - (this.cloudSpread || 40); }
   }
 
