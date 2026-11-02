@@ -38,6 +38,7 @@ jobs:
   ios:
     needs: test
     runs-on: macos-15
+    timeout-minutes: 45
     env:
       GAME: ${{ inputs.game || 'pocket-ecosystem' }}
       SIGN: ${{ inputs.signed && 'true' || 'false' }}
