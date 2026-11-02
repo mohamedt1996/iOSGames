@@ -27,6 +27,7 @@ const P = {
   hourglass: '<path d="M6 2h12M6 22h12M7 2c0 6 10 8 10 10S7 16 7 22M17 2c0 6-10 8-10 10s10 4 10 10"/>',
   star: '<path d="M12 2l3 7 7 .6-5.4 4.6L18.5 22 12 18l-6.5 4 1.9-7.8L2 9.6 9 9Z"/>',
   flag: '<path d="M5 22V3M5 4h12l-2 4 2 4H5"/>',
+  x: '<path d="M6 6l12 12M18 6 6 18"/>',
   sound: '<path d="M4 9h4l5-4v14l-5-4H4Z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/>',
 };
 export const icon = (name, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || ''}</svg>`;

@@ -126,7 +126,7 @@ h1, h2, h3, h4 { font-family: var(--serif); font-weight: 600; letter-spacing: 0.
 .toast.show { opacity: 1; } .toast.gold { color: var(--gold2); } .toast.red { color: #ff9a80; border-color: rgba(224,97,60,0.5); }
 
 /* deploy */
-.deploy-panel { display: none; position: absolute; left: calc(10px + var(--sa-l)); top: calc(64px + var(--sa-t)); bottom: calc(10px + var(--sa-b)); width: 250px; overflow-y: auto; padding: 12px 14px; border-radius: 16px; background: var(--bg); border: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); text-align: center; }
+.deploy-panel { display: none; position: absolute; left: calc(10px + var(--sa-l)); top: calc(64px + var(--sa-t)); bottom: calc(10px + var(--sa-b)); width: 230px; overflow-y: auto; padding: 10px 12px; border-radius: 16px; background: var(--bg); border: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); text-align: center; }
 .deploying .deploy-panel { display: block; }
 .deploying .fight-only { display: none !important; }
 .dp-title b { font-family: var(--serif); color: var(--gold2); font-size: 18px; display: block; }
@@ -144,7 +144,7 @@ h1, h2, h3, h4 { font-family: var(--serif); font-weight: 600; letter-spacing: 0.
 .cards { flex: 1; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-content: flex-end; }
 .ucard { position: relative; width: 74px; height: 64px; border-radius: 10px; background: var(--bg); border: 1px solid rgba(111,168,255,0.35); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; overflow: hidden; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 .ucard .ic { width: 22px; height: 22px; color: var(--blue); }
-.ucard .nm { font-size: 11px; font-weight: 700; line-height: 1; }
+.ucard .nm { font-size: 11px; font-weight: 700; line-height: 1.1; max-width: 100%; padding: 0 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ucard .vet { position: absolute; top: 2px; right: 4px; font-size: 9px; color: var(--gold2); }
 .ucard .hp { position: absolute; left: 6px; right: 6px; bottom: 4px; height: 4px; background: rgba(0,0,0,0.6); border-radius: 2px; overflow: hidden; }
 .ucard .hp b, .rost .hp b { display: block; height: 100%; background: #7fd06a; }
@@ -161,7 +161,7 @@ h1, h2, h3, h4 { font-family: var(--serif); font-weight: 600; letter-spacing: 0.
 /* end + pause */
 .end-card, .pause-card { position: absolute; inset: 0; background: rgba(8,6,5,0.7); display: grid; place-items: center; padding: calc(10px + var(--sa-t)) 14px calc(10px + var(--sa-b)); overflow-y: auto; }
 .pause-card { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 12px; }
-.end-inner { width: min(620px, 100%); padding: 18px 22px; border-radius: 18px; background: linear-gradient(180deg, #2b211a, #1a1411); border: 1px solid var(--line); text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.6); animation: rise 0.5s ease-out; }
+.end-inner { max-height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; width: min(620px, 100%); padding: 18px 22px; border-radius: 18px; background: linear-gradient(180deg, #2b211a, #1a1411); border: 1px solid var(--line); text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.6); animation: rise 0.5s ease-out; }
 @keyframes rise { from { transform: translateY(20px); opacity: 0; } }
 .end-inner h1 { font-size: 42px; margin: 0; font-weight: 800; }
 .end-inner.win h1 { color: var(--gold2); text-shadow: 0 0 30px rgba(232,179,90,0.6); }
@@ -192,8 +192,15 @@ h1, h2, h3, h4 { font-family: var(--serif); font-weight: 600; letter-spacing: 0.
 .log p { margin: 3px 0; font-size: 13px; color: var(--ink); text-shadow: 0 1px 4px #000, 0 0 10px #000; }
 .log p:not(:first-child) { opacity: 0.6; }
 .modal { position: absolute; inset: 0; background: rgba(8,6,5,0.65); display: grid; place-items: center; padding: calc(10px + var(--sa-t)) 14px calc(10px + var(--sa-b)); }
-.modal .sheet { width: min(640px, 100%); max-height: 100%; overflow-y: auto; touch-action: pan-y; padding: 18px 20px; border-radius: 16px; background: linear-gradient(180deg, #2b211a, #1c1612); border: 1px solid var(--line); text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.6); animation: rise 0.4s ease-out; }
+.modal .sheet { position: relative; display: flex; flex-direction: column; width: min(640px, 100%); max-height: 100%; overflow: hidden; padding: 0; border-radius: 16px; background: linear-gradient(180deg, #2b211a, #1c1612); border: 1px solid var(--line); text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.6); animation: rise 0.4s ease-out; }
 .modal .sheet * { pointer-events: auto; }
+.sheet-body { overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 16px 20px 0; min-height: 0; }
+.sheet-body > button:last-child, .end-inner > button:last-child { position: sticky; bottom: 0; z-index: 3; margin: 10px 0 14px; width: 100%; }
+.sheet-body > .ghost:last-child { background: #241c16; }
+.x { position: absolute; top: 8px; right: 8px; z-index: 4; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: rgba(0,0,0,0.55); border: 1px solid var(--line); color: var(--ink); }
+.x .ic { width: 20px; height: 20px; }
+.sheet-head { position: sticky; top: 0; z-index: 3; padding: 4px 0; background: inherit; }
+.menu .sheet-head { background: rgba(14,11,9,0.96); margin: -4px -4px 10px; padding: 6px 4px; }
 .modal h2 { color: var(--gold2); }
 .modal p { line-height: 1.4; }
 .choices { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
@@ -205,6 +212,10 @@ h1, h2, h3, h4 { font-family: var(--serif); font-weight: 600; letter-spacing: 0.
 .rost .hp { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: rgba(0,0,0,0.5); overflow: hidden; }
 
 @media (max-height: 520px) {
+  .modal .recruit small { display: none; }
+  .modal .recruits { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); margin: 6px 0; }
+  .modal h2 { font-size: 20px; margin-bottom: 2px; }
+  .end-inner h1 { font-size: 32px; } .end-stats { gap: 18px; margin-bottom: 6px; } .end-stats b { font-size: 20px; }
   .menu.title { align-content: start; }
   .title-block h1 { font-size: min(44px, 10vh); }
   .tag { margin: 4px 0 10px; }

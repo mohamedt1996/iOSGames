@@ -70,7 +70,11 @@ export class GameScreen {
   }
   bannerMsg(text, ms = 1600) { const b = this.hud.querySelector('.banner'); b.innerHTML = `<span>${text}</span>`; b.classList.add('show'); clearTimeout(this._b); this._b = setTimeout(() => b.classList.remove('show'), ms); }
 
-  sheet(html) { const s = this.hud.querySelector('.sheet-wrap'); s.innerHTML = `<div class="sheet">${html}</div>`; s.classList.remove('hidden'); }
+  sheet(html, closable = false) {
+    const s = this.hud.querySelector('.sheet-wrap');
+    s.innerHTML = `<div class="sheet">${closable ? `<button class="x" data-a="close" aria-label="Close">${icon('x')}</button>` : ''}<div class="sheet-body">${html}</div></div>`;
+    s.classList.remove('hidden');
+  }
   closeSheet() { this.hud.querySelector('.sheet-wrap').classList.add('hidden'); }
 
   // ---------------- court ----------------
@@ -184,7 +188,7 @@ export class GameScreen {
     if (!o) return;
     const pl = r.place(this.me, o);
     this.view.addToken(pl); this.view.highlight(null); this.app.audio.card(); haptic('medium');
-    if (pl.peek) { this.view.peek(pl.peek.idx); const spied = r.placements[pl.peek.idx]; this.sheet(`<h2>${icon('eye')} Your spy reports</h2><p><b style="color:${HOUSES[spied.house].color}">${HOUSES[spied.house].short}</b>’s card on <b>${r.prov(spied.target ?? spied.from).name}</b> is:</p>${this.cardHtml(pl.peek.card, 'big-card')}<button class="big" data-a="close">Understood</button>`); }
+    if (pl.peek) { this.view.peek(pl.peek.idx); const spied = r.placements[pl.peek.idx]; this.sheet(`<h2>${icon('eye')} Your spy reports</h2><p><b style="color:${HOUSES[spied.house].color}">${HOUSES[spied.house].short}</b>’s card on <b>${r.prov(spied.target ?? spied.from).name}</b> is:</p>${this.cardHtml(pl.peek.card, 'big-card')}<button class="big" data-a="close">Understood</button>`, true); }
     this.hud.querySelector('.handbar').classList.add('hidden');
     this.selCard = null;
     await this.aiTurns();
@@ -282,7 +286,7 @@ export class GameScreen {
     const r = this.r, a = b.dataset.a;
     if (b.dataset.h && b.dataset.h !== this.me) return this.housePanel(b.dataset.h);
     switch (a) {
-      case 'menu': return this.sheet(`<h2>Leave the table?</h2><p class="muted">This game will be abandoned. The houses keep what they learned.</p><button class="big" data-a="quit">Leave</button><button class="ghost" data-a="close">Stay</button>`);
+      case 'menu': return this.sheet(`<h2>Leave the table?</h2><p class="muted">This game will be abandoned. The houses keep what they learned.</p><button class="big" data-a="quit">Leave</button><button class="ghost" data-a="close">Stay</button>`, true);
       case 'quit': return this.o.onEnd?.(null);
       case 'close': this.closeSheet(); return;
       case 'offer': {
@@ -314,7 +318,7 @@ export class GameScreen {
       ${pact ? `<p class="good">You are at peace for ${r.pacts[r.pairKey(this.me, id)]} more round(s).</p>` : ''}
       ${betrayed ? `<p class="bad">You have betrayed this house ${betrayed} time${betrayed > 1 ? 's' : ''}. It has not forgotten.</p>` : ''}
       ${can ? `<button class="big" data-a="propose" data-h2="${id}">${icon('peace')} Offer a 3-round pact</button>` : r.phase !== 'court' && !pact ? '<p class="muted">Pacts are offered at court, at the start of a round.</p>' : ''}
-      <button class="ghost" data-a="close">Close</button>`);
+      <button class="ghost" data-a="close">Close</button>`, true);
   }
 
   bindInput() {

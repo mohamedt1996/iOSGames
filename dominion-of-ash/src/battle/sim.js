@@ -8,6 +8,7 @@ const angDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= TAU; while (
 export const DT = 0.05;
 export const TIME_LIMIT = 300;
 export const HOLD = 35;
+export const HOLD_DELAY = 30; // nobody can claim the banner in the opening 30 s
 
 // Deterministic real-time battle. The renderer reads units/projectiles/events; commanders issue orders.
 export class Battle {
@@ -344,7 +345,7 @@ export class Battle {
     for (const side of ['ember', 'ash']) {
       const mine = this.units.some((u) => u.alive && u.side === side && Math.hypot(u.x - b.x, u.z - b.z) < 1.6);
       const theirs = this.units.some((u) => u.alive && u.side !== side && Math.hypot(u.x - b.x, u.z - b.z) < 3.2);
-      if (mine && !theirs) this.hold[side] += dt; else this.hold[side] = Math.max(0, this.hold[side] - dt * 0.5);
+      if (mine && !theirs && this.t > HOLD_DELAY) this.hold[side] += dt; else this.hold[side] = Math.max(0, this.hold[side] - dt * 0.5);
     }
     const end = (w, reason) => { this.over = true; this.winner = w; this.reason = reason; this.events.push({ e: 'end', winner: w, reason }); };
     if (!alive.ash && !alive.ember) return end('ash', 'Both armies broke. The ash settles over an empty field.');

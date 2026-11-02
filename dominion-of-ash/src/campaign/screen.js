@@ -117,14 +117,19 @@ export class CampaignScreen {
     }
   }
 
-  modal(html) { const m = this.hud.querySelector('.modal'); m.innerHTML = `<div class="sheet">${html}</div>`; m.classList.remove('hidden'); }
+  // closable sheets get an X that never scrolls away; the body scrolls, the last button stays pinned
+  modal(html, closable = false) {
+    const m = this.hud.querySelector('.modal');
+    m.innerHTML = `<div class="sheet">${closable ? `<button class="x" data-a="close" aria-label="Close">${icon('x')}</button>` : ''}<div class="sheet-body">${html}</div></div>`;
+    m.classList.remove('hidden');
+  }
   closeModal() { this.hud.querySelector('.modal').classList.add('hidden'); }
 
   recruitModal() {
     const c = this.c;
     this.modal(`<h2>${icon('shield')} Recruit</h2><p class="muted">Treasury ${c.s.gold} gold · army ${c.army.units.length}/8</p>
       <div class="recruits">${ROSTER.ember.map((t) => { const u = UNITS[t], cost = c.recruitCost(t); return `<button class="recruit" data-a="buy" data-t="${t}" ${c.s.gold < cost || c.army.units.length >= 8 ? 'disabled' : ''}>${icon(UNIT_ICON[t])}<b>${u.name}</b><small>${u.blurb}</small><span>${icon('coin')} ${cost}</span></button>`; }).join('')}</div>
-      <button class="ghost" data-a="close">Done</button>`);
+      <button class="big" data-a="close">Done</button>`, true);
   }
 
   armyModal() {
@@ -133,7 +138,7 @@ export class CampaignScreen {
       <p>Commander · level ${h.level} · ${h.perks.map((p) => PERKS[p].name).join(', ') || 'no gifts yet'}</p>
       <div class="roster">${a.units.map((u) => `<div class="rost">${icon(UNIT_ICON[u.type])}<b>${UNITS[u.type].name}</b><span class="vet">${'★'.repeat(u.vet)}</span><i class="hp"><b style="width:${(u.hp ?? 1) * 100}%"></b></i></div>`).join('')}</div>
       <p class="muted">Soldiers gain ranks from kills. Wounds heal in your towns.</p>
-      <button class="ghost" data-a="close">Close</button>`);
+      <button class="big" data-a="close">Close</button>`, true);
   }
 
   fight(b) {

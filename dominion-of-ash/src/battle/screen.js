@@ -36,8 +36,8 @@ export class BattleScreen {
     this.bounds = { x0, x1, z0, z1 };
     this.stage.frame(this.bounds, 24);
     this.stage.rig.yaw = 0; this.stage.rig.tz = z0 + 4; this.stage.rig.dist = 30;
-    this.camGoal = { tz: z1 - 4, dist: 19, t: 0 };
-    this.stage.rig.tx -= 2.2;
+    this.camGoal = { tz: z1 - 1.5, dist: 17, t: 0 };
+    this.stage.rig.tx -= innerWidth < 900 ? 4 : 2.5; // keep your deployment clear of the side panel
     // the rival chooses before seeing where you stand
     const { plan, ctx } = choosePlan(this.brain);
     this.plan = plan; this.ctx = ctx;
@@ -215,6 +215,7 @@ export class BattleScreen {
     const cv = this.stage.renderer.domElement;
     const pts = new Map(); let pan = false, start = null, pinch = null;
     const down = (e) => {
+      this.camGoal = null; // the player takes the camera
       cv.setPointerCapture?.(e.pointerId);
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pts.size === 1) { start = { x: e.clientX, y: e.clientY, t: performance.now() }; pan = false; }
@@ -310,8 +311,8 @@ export class BattleScreen {
     if (this.camGoal) {
       const g = this.camGoal; g.t += dt;
       const k = Math.min(1, g.t / 3), e = k * k * (3 - 2 * k);
-      this.stage.rig.tz += (g.tz - this.stage.rig.tz) * e * 0.12; this.stage.rig.dist += (g.dist - this.stage.rig.dist) * e * 0.12;
-      if (k >= 1) this.camGoal = null;
+      const f = 1 - Math.exp(-dt * (1 + 5 * e)); this.stage.rig.tz += (g.tz - this.stage.rig.tz) * f; this.stage.rig.dist += (g.dist - this.stage.rig.dist) * f;
+      if (k >= 1 && Math.abs(g.tz - this.stage.rig.tz) < 0.3) this.camGoal = null;
     }
     const b = this.battle;
     if (this.phase === 'fight' && !this.paused && !b.over) {
