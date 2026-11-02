@@ -34,6 +34,8 @@ jobs:
 
   release:
     needs: build
+    # publish whatever built; a macOS runner shortage shouldn't block the other games
+    if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
@@ -51,11 +53,14 @@ jobs:
       - name: Checksums and notes
         run: |
           cd dist
+          ls *.ipa >/dev/null 2>&1 || { echo "::error::No IPAs were built"; exit 1; }
           ls -la
           sha256sum *.ipa > SHA256SUMS.txt
           cat > ../notes.md <<EOF
           ## Builds
           $(for f in *.ipa; do printf -- '- `%s` (%s)\n' "$f" "$(du -h "$f" | cut -f1)"; done)
+
+          $( [ "${{ needs.build.result }}" != "success" ] && echo "> Some builds failed or were not picked up by a macOS runner; re-run the release to add them." )
 
           Unsigned IPAs must be signed before installing (Sideloadly or AltStore with your Apple ID).
           Signed builds are produced when the release is run with **signed** and the IOS_* secrets are set.
