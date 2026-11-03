@@ -9,7 +9,7 @@ const KEY = 'dominion-of-ash-v1';
 
 const defaults = () => ({
   brain: null, campaign: null, chronicles: {}, seenIntro: false,
-  settings: { sound: true, music: true, haptics: true, graphics: 'auto', autoTier: 'high' },
+  settings: { sound: true, music: true, haptics: true, graphics: 'auto', autoTier: 'high', stats: false },
 });
 
 export async function loadSave() {

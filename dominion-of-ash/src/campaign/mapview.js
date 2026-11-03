@@ -3,7 +3,7 @@ import { Assets } from '../render/assets.js';
 import { ringTexture } from '../render/textures.js';
 import { mulberry32 } from '../core/rng.js';
 import { toWorld } from '../core/hex.js';
-import { bakeParts, grassTint, blobShadow, Water, Foliage } from '../render/look.js';
+import { bakeParts, grassTint, blobShadow, Water, Foliage, disposeTree } from '../render/look.js';
 
 const M = (x, y, z, ry = 0, s = 1) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, 0)), new THREE.Vector3(s, s, s));
 const COLOR = { ember: 'blue', ash: 'red', null: 'yellow' };
@@ -90,9 +90,9 @@ export class MapView {
       default: return null;
     }
     if (reg.owner === 'ash' && reg.type !== 'citadel') put('flag_red', -0.7, -0.4, 0.8);
-    g.position.set(reg.x, 0, reg.z);
-    g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-    return g;
+    const baked = new THREE.Group(); bakeParts(Assets.bakeObject(g), baked); disposeTree(g);
+    baked.position.set(reg.x, 0, reg.z);
+    return baked;
   }
 
   sync() {
@@ -101,7 +101,7 @@ export class MapView {
       const k = `${reg.owner}|${reg.relicTaken}`;
       const s = this.sites.get(reg);
       if (!s || s.k !== k) {
-        if (s?.obj) this.group.remove(s.obj);
+        if (s?.obj) disposeTree(s.obj);
         const obj = this.siteModel(reg); if (obj) this.group.add(obj);
         this.sites.set(reg, { k, obj });
       }
@@ -125,7 +125,7 @@ export class MapView {
       const reg = c.region(b.q, b.r); v.userData.goal = new THREE.Vector3(reg.x + 0.1, 0, reg.z);
       v.userData.band = b;
     }
-    for (const [id, v] of this.bands) if (!live.has(id)) { this.group.remove(v); this.bands.delete(id); }
+    for (const [id, v] of this.bands) if (!live.has(id)) { disposeTree(v); this.bands.delete(id); }
     // reachable regions
     this.reach.clear();
     for (const n of c.reachable()) {
@@ -157,5 +157,5 @@ export class MapView {
     out.push({ army: true, x: (v.x + 1) / 2 * w, y: (1 - v.y) / 2 * h, vis: v.z < 1 });
     return out;
   }
-  dispose() { this.water.dispose(); this.foliage.dispose(); this.scene.remove(this.group); }
+  dispose() { this.water.dispose(); this.foliage.dispose(); disposeTree(this.group); }
 }

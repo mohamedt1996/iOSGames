@@ -5,7 +5,7 @@ import { cardBack, cardFace } from './cardtex.js';
 import { toWorld, dist } from '../core/hex.js';
 import { mulberry32 } from '../core/rng.js';
 import { HOUSES } from '../game/realm.js';
-import { bakeParts, grassTint, blobShadow, Atmosphere, Water, Foliage } from './look.js';
+import { bakeParts, grassTint, blobShadow, Atmosphere, Water, Foliage, disposeTree } from './look.js';
 
 const M = (x, y, z, ry = 0, s = 1) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, 0)), new THREE.Vector3(s, s, s));
 const SHOW = { knight: ['1H_Sword', 'Round_Shield'], barbarian: ['2H_Axe'], rogue: ['2H_Crossbow'], mage: ['2H_Staff'], rogue_hooded: ['Knife', 'Knife_Offhand'] };
@@ -60,7 +60,7 @@ export class RealmView {
       const ring = new THREE.Mesh(this.ringGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false }));
       ring.position.set(p.x, 0.04, p.z); this.group.add(ring);
       const hl = new THREE.Mesh(this.fillGeo, new THREE.MeshBasicMaterial({ color: 0xffe39a, transparent: true, opacity: 0, depthWrite: false }));
-      hl.position.set(p.x, 0.05, p.z); this.group.add(hl);
+      hl.position.set(p.x, 0.05, p.z); hl.visible = false; this.group.add(hl);
       this.prov.set(p.id, { ring, hl, site: null, siteKey: '', figs: [], figKey: '' });
     }
     this.mixers = new Set();
@@ -92,11 +92,12 @@ export class RealmView {
       default: if (!p.walls) return null;
     }
     for (let i = 0; i < p.walls; i++) put('wall_straight', Math.cos(i * 2.1 + 0.6) * 0.82, Math.sin(i * 2.1 + 0.6) * 0.82, 0.32, -i * 2.1 - 0.6 + Math.PI / 2);
-    if (!p.owner) g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.setRGB(0.55, 0.52, 0.5); } });
+    if (!p.owner) g.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.userData = { owned: true }; o.material.color.setRGB(0.55, 0.52, 0.5); } });
     if (p.owner && p.type !== 'plain' && p.type !== 'forest' && p.type !== 'hills') { const f = put(`flag_${col}`, -0.75, -0.35, 0.7); f.userData.flag = true; }
-    g.position.set(p.x, 0, p.z);
-    g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-    return g;
+    // one draw call per holding instead of one per prop
+    const baked = new THREE.Group(); bakeParts(Assets.bakeObject(g), baked); disposeTree(g);
+    baked.position.set(p.x, 0, p.z);
+    return baked;
   }
 
   figure(model) {
@@ -106,7 +107,9 @@ export class RealmView {
     const a = c.actions.Idle_Combat || c.actions.Idle; a?.play(); if (a) a.time = Math.random() * 2;
     this.mixers.add(c.mixer);
     c.root.userData.c = c;
-    const blob = blobShadow(2.6, 0.45); c.root.add(blob);
+    // figures rely on contact shadows: skipping the shadow pass halves their draw cost
+    c.root.traverse((o) => { if (o.isMesh) o.castShadow = false; });
+    const blob = blobShadow(2.6, 0.5); c.root.add(blob);
     return c.root;
   }
 
@@ -114,13 +117,13 @@ export class RealmView {
     for (const p of this.r.provinces) {
       const v = this.prov.get(p.id);
       const sk = `${p.owner}|${p.walls}`;
-      if (sk !== v.siteKey) { if (v.site) this.group.remove(v.site); v.site = this.site(p); if (v.site) this.group.add(v.site); v.siteKey = sk; }
+      if (sk !== v.siteKey) { if (v.site) disposeTree(v.site); v.site = this.site(p); if (v.site) this.group.add(v.site); v.siteKey = sk; }
       v.ring.material.color.set(p.owner ? HOUSES[p.owner].color : '#ffffff');
-      v.ring.material.opacity = p.owner ? 0.9 : 0.1;
-      const n = p.owner ? Math.min(3, 1 + Math.floor(p.troops / 5)) : 0;
+      v.ring.material.opacity = 0.9; v.ring.visible = !!p.owner; // invisible meshes still cost a draw call
+      const n = p.owner ? (p.troops >= 8 ? 2 : 1) : 0; // the badge carries the exact count
       const fk = `${p.owner}|${n}`;
       if (fk !== v.figKey) {
-        for (const f of v.figs) { this.group.remove(f); this.mixers.delete(f.userData.c.mixer); }
+        for (const f of v.figs) { this.mixers.delete(f.userData.c.mixer); disposeTree(f); }
         v.figs = [];
         const hasSite = !!v.site && !['plain', 'forest', 'hills'].includes(p.type);
         for (let i = 0; i < n; i++) {
@@ -134,7 +137,7 @@ export class RealmView {
     }
   }
 
-  highlight(ids, color = 0xffe39a) { for (const [id, v] of this.prov) { const on = ids?.has(id); v.hl.material.color.setHex(color); v.hl.userData.on = on; if (!on) v.hl.material.opacity = 0; } }
+  highlight(ids, color = 0xffe39a) { for (const [id, v] of this.prov) { const on = ids?.has(id); v.hl.material.color.setHex(color); v.hl.userData.on = on; v.hl.visible = !!on; } }
 
   // ---------------- cards on the table ----------------
   addToken(pl) {
@@ -157,7 +160,7 @@ export class RealmView {
       const a = new THREE.Vector3(s.x, 0.3, s.z), b = new THREE.Vector3(t.x, 0.3, t.z);
       const mid = a.clone().add(b).multiplyScalar(0.5); mid.y = 1.2 + a.distanceTo(b) * 0.15;
       const curve = new THREE.QuadraticBezierCurve3(a, mid, b.clone().lerp(a, 0.12));
-      const tex = dashTexture().clone(); tex.needsUpdate = true; tex.repeat.set(Math.max(2, a.distanceTo(b) * 1.6), 1);
+      const tex = dashTexture().clone(); tex.needsUpdate = true; tex.userData = { owned: true }; tex.repeat.set(Math.max(2, a.distanceTo(b) * 1.6), 1);
       const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 32, 0.07, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(HOUSES[pl.house].color).multiplyScalar(1.6), map: tex, transparent: true, opacity: 0.95, depthWrite: false }));
       tube.userData.tex = tex;
       const tip = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.4, 10), new THREE.MeshBasicMaterial({ color: new THREE.Color(HOUSES[pl.house].color).multiplyScalar(1.6), transparent: true }));
@@ -171,7 +174,7 @@ export class RealmView {
   }
   reveal(idx) { const t = this.tokens.get(idx); if (t) t.flipping = true; }
   peek(idx) { const t = this.tokens.get(idx); if (t) t.peek = 1; }
-  clearTokens() { for (const t of this.tokens.values()) { this.group.remove(t.g); if (t.arrow) this.group.remove(...t.arrow); } this.tokens.clear(); }
+  clearTokens() { for (const t of this.tokens.values()) { disposeTree(t.g); if (t.arrow) for (const a of t.arrow) disposeTree(a); } this.tokens.clear(); }
 
   // ---------------- resolution animations ----------------
   march(fromId, toId, house, n, won) {
@@ -210,7 +213,7 @@ export class RealmView {
       a.t += dt; if (a.t < 0) return true;
       const k = Math.min(1, a.t / a.dur);
       a.f.position.lerpVectors(a.from, a.to, k); a.f.position.y = Math.abs(Math.sin(k * Math.PI * 4)) * 0.06;
-      if (k >= 1) { this.group.remove(a.f); this.mixers.delete(a.f.userData.c.mixer); return false; }
+      if (k >= 1) { this.mixers.delete(a.f.userData.c.mixer); disposeTree(a.f); return false; }
       return true;
     });
     for (const v of this.prov.values()) if (v.hl.userData.on) v.hl.material.opacity = 0.28 + Math.sin(time * 4) * 0.12;
@@ -230,5 +233,5 @@ export class RealmView {
     return out;
   }
   setScale(px) { for (const p of [this.fx, this.dust, this.glints]) p.mat.uniforms.scale.value = px * 0.5; this.air.setScale(px); }
-  dispose() { this.water.dispose(); this.foliage.dispose(); this.scene.remove(this.group); this.mixers.clear(); }
+  dispose() { this.clearTokens(); this.water.dispose(); this.foliage.dispose(); disposeTree(this.group); this.ringGeo.dispose(); this.fillGeo.dispose(); this.mixers.clear(); }
 }

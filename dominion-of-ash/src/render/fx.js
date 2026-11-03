@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Particles } from './particles.js';
 import { Assets } from './assets.js';
 import { ringTexture } from './textures.js';
+import { disposeTree } from './look.js';
 
 const RING = ringTexture();
 
@@ -16,13 +17,19 @@ export class FX {
     this.proj = new Map();
     this.rings = [];
     this.flashes = []; this.fireL = [];
+    this.flashPool = [];
+    for (let i = 0; i < 3; i++) { const l = new THREE.PointLight(0xffffff, 0, 7, 2); this.group.add(l); this.flashPool.push(l); }
+    for (let i = 0; i < 4; i++) { const l = new THREE.PointLight(0xff7a2a, 0, 6, 2); this.group.add(l); this.fireL.push(l); }
     this.fireLights = new Map();
     this.markers = [];
   }
 
   // pooled flash lights for explosions
   flash(x, y, z, color, intensity = 12, dur = 0.35) {
-    const l = new THREE.PointLight(color, intensity, 7, 2); l.position.set(x, y, z); this.group.add(l);
+    // reuse the dimmest pooled light
+    const l = this.flashPool.reduce((a, b) => (a.intensity <= b.intensity ? a : b));
+    this.flashes = this.flashes.filter((f) => f.l !== l);
+    l.color.set(color); l.position.set(x, y, z); l.intensity = intensity;
     this.flashes.push({ l, t: 0, dur, i0: intensity });
   }
   ring(x, z, color, r0, r1, dur = 0.6, y = 0.05) {
@@ -101,7 +108,7 @@ export class FX {
         if (p.kind === 'fireball') this.smoke.emit(p.x, y, p.z, 0, 0.3, 0, 0.8, 0.2, 0.18, 0.16, 0.5, 0.25);
       }
     }
-    for (const [k, v] of this.proj) if (!seen.has(k)) { this.group.remove(v); this.proj.delete(k); }
+    for (const [k, v] of this.proj) if (!seen.has(k)) { disposeTree(v); this.proj.delete(k); }
     // burning forests
     let li = 0;
     for (const f of this.fireLights.values()) {
@@ -109,8 +116,7 @@ export class FX {
       for (let i = 0; i < 2; i++) this.sparks.emit(f.x + (Math.random() - 0.5) * 1.4, y + 0.2 + Math.random() * 0.4, f.z + (Math.random() - 0.5) * 1.4, (Math.random() - 0.5) * 0.3, 1.2 + Math.random(), (Math.random() - 0.5) * 0.3, 0.7 + Math.random() * 0.4, 3, 1.2 + Math.random() * 0.6, 0.3, 1, 0.22 + Math.random() * 0.15);
       if (Math.random() < 0.5) this.smoke.emit(f.x + (Math.random() - 0.5), y + 1.2, f.z + (Math.random() - 0.5), 0.1, 0.8, 0, 2.5, 0.16, 0.14, 0.13, 0.55, 0.55);
       if (li < 4) {
-        let l = this.fireL[li];
-        if (!l) { l = this.fireL[li] = new THREE.PointLight(0xff7a2a, 0, 6, 2); this.group.add(l); }
+        const l = this.fireL[li];
         l.position.set(f.x, y + 1, f.z); l.intensity = 6 + Math.sin(time * 17 + li) * 2;
       }
       li++;
@@ -121,15 +127,15 @@ export class FX {
     // rings and flash lights
     this.rings = this.rings.filter((r) => {
       r.t += dt; const k = r.t / r.dur;
-      if (k >= 1) { this.group.remove(r.m); r.m.geometry.dispose(); return false; }
+      if (k >= 1) { disposeTree(r.m); return false; }
       const s = r.r0 + (r.r1 - r.r0) * (1 - Math.pow(1 - k, 2)); r.m.scale.set(s, 1, s); r.m.material.opacity = 1 - k; return true;
     });
     this.flashes = this.flashes.filter((L) => {
       L.t += dt; L.l.intensity = L.i0 * Math.max(0, 1 - L.t / L.dur);
-      if (L.t >= L.dur) { this.group.remove(L.l); return false; } return true;
+      if (L.t >= L.dur) { L.l.intensity = 0; return false; } return true;
     });
     this.sparks.update(dt); this.dust.update(dt); this.smoke.update(dt);
   }
   setScale(px) { for (const p of [this.sparks, this.dust, this.smoke]) p.mat.uniforms.scale.value = px * 0.5; }
-  dispose() { this.scene.remove(this.group); }
+  dispose() { disposeTree(this.group); }
 }

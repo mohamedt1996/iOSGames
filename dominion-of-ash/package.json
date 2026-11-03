@@ -17,9 +17,10 @@
     "@capacitor/preferences": "^8.0.1",
     "@capacitor/splash-screen": "^8.0.2",
     "@capacitor/status-bar": "^8.0.4",
-    "@fontsource/cinzel": "^5.2.0",
     "@fontsource/alegreya-sans": "^5.2.0",
-    "three": "^0.187.0"
+    "@fontsource/cinzel": "^5.2.0",
+    "three": "^0.187.0",
+    "zustand": "^5.0.16"
   },
   "devDependencies": {
     "@capacitor/assets": "^4.0.0",

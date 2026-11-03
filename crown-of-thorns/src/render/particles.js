@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { sparkSprite } from './textures.js';
 
+let SPARK = null; // one sprite texture shared by every particle system
+
 // Pooled point particles with gravity, drag, fade and per-particle color/size.
 export class Particles {
   constructor(parent, { max = 600, additive = false, gravity = -0.6, drag = 1.5 } = {}) {
@@ -14,7 +16,7 @@ export class Particles {
     g.setAttribute('color', new THREE.BufferAttribute(this.col, 4).setUsage(THREE.DynamicDrawUsage));
     g.setAttribute('size', new THREE.BufferAttribute(this.size, 1).setUsage(THREE.DynamicDrawUsage));
     this.mat = new THREE.ShaderMaterial({
-      uniforms: { map: { value: sparkSprite() }, scale: { value: 600 } },
+      uniforms: { map: { value: (SPARK ||= sparkSprite()) }, scale: { value: 600 } },
       vertexShader: 'attribute float size; attribute vec4 color; varying vec4 vC; uniform float scale; void main(){ vC = color; vec4 mv = modelViewMatrix*vec4(position,1.); gl_PointSize = size*scale/ -mv.z; gl_Position = projectionMatrix*mv; }',
       fragmentShader: 'uniform sampler2D map; varying vec4 vC; void main(){ float a = texture2D(map, gl_PointCoord).a; gl_FragColor = vec4(vC.rgb, vC.a*a); }',
       transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
@@ -55,4 +57,5 @@ export class Particles {
     g.attributes.position.needsUpdate = true; g.attributes.color.needsUpdate = true; g.attributes.size.needsUpdate = true;
   }
   clear() { this.n = 0; }
+  dispose() { this.points.parent?.remove(this.points); this.points.geometry.dispose(); this.mat.dispose(); }
 }

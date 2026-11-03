@@ -3,7 +3,7 @@ import { Assets } from './assets.js';
 import { offsetToAxial, toWorld } from '../core/hex.js';
 import { COLS, ROWS, TERRAIN } from '../battle/maps.js';
 import { mulberry32 } from '../core/rng.js';
-import { bakeParts, grassTint, Water, Foliage } from './look.js';
+import { bakeParts, grassTint, Water, Foliage, disposeTree } from './look.js';
 
 export const HILL_Y = 0.55;
 const M = (x, y, z, ry = 0, s = 1) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, 0)), new THREE.Vector3(s, s, s));
@@ -123,7 +123,7 @@ export class BattleWorld {
         const mark = new THREE.Mesh(this.hexGeo, new THREE.MeshBasicMaterial({ color: 0x1b1612, transparent: true, opacity: 0.55, depthWrite: false }));
         mark.position.set(c.x, 0.015, c.z); this.group.add(mark);
       }
-      if (g && c.burn > 0) for (const t of g.children) t.traverse((o) => { if (o.isMesh && !o.userData.char) { o.material = o.material.clone(); o.material.color.setRGB(0.35, 0.25, 0.18); o.userData.char = true; } });
+      if (g && c.burn > 0) for (const t of g.children) t.traverse((o) => { if (o.isMesh && !o.userData.char) { o.material = o.material.clone(); o.material.userData = { owned: true }; o.material.color.setRGB(0.35, 0.25, 0.18); o.userData.char = true; } });
     }
     const h = battle.hold;
     const lead = h.ember > 1 ? 'ember' : h.ash > 1 ? 'ash' : 'none';
@@ -131,5 +131,5 @@ export class BattleWorld {
   }
 
   animate(time, sunDir) { this.water.update(time, sunDir); this.foliage.update(time); }
-  dispose() { this.water.dispose(); this.foliage.dispose(); this.scene.remove(this.group); this.group.traverse((o) => { if (o.geometry && o.name === 'terrain') { o.geometry.dispose(); if (o.material.vertexColors) o.material.dispose(); } }); }
+  dispose() { this.water.dispose(); this.foliage.dispose(); disposeTree(this.group); }
 }

@@ -37,6 +37,12 @@ export class Stage {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, q.pixelRatio));
     this.sun.shadow.mapSize.set(q.shadow, q.shadow);
     if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; }
+    // battery tier: no shadow map at all (the soft contact blobs still ground characters)
+    const shadows = name !== 'battery';
+    if (this.renderer.shadowMap.enabled !== shadows) {
+      this.renderer.shadowMap.enabled = shadows;
+      this.scene.traverse((o) => { const m = o.material; if (m) for (const x of Array.isArray(m) ? m : [m]) x.needsUpdate = true; });
+    }
     this.post.setup(q); this.resize();
   }
 
@@ -101,7 +107,7 @@ export class Stage {
   }
 
   get sunDir() { return (this._sd ||= new THREE.Vector3()).copy(this.sun.position).sub(this.sun.target.position).normalize(); }
-  render(dt, time) { this.updateCamera(dt); this.sky?.follow(this.camera); this.post.render(dt, time, this.night ? 1 : 0); }
+  render(dt, time) { this.renderer.info.autoReset = false; this.renderer.info.reset(); this.updateCamera(dt); this.sky?.follow(this.camera); this.post.render(dt, time, this.night ? 1 : 0); }
 
   ground(clientX, clientY, objects) {
     const rect = this.renderer.domElement.getBoundingClientRect();

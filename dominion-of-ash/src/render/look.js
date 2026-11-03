@@ -30,7 +30,7 @@ export function bakeParts(parts, group, { shadows = true } = {}) {
       return y;
     });
     const merged = mergeGeometries(norm, false); if (!merged) continue;
-    const m = mat.clone(); m.vertexColors = true;
+    const m = mat.clone(); m.vertexColors = true; m.userData = { owned: true };
     const mesh = new THREE.Mesh(merged, m); mesh.receiveShadow = true; mesh.castShadow = shadows; mesh.name = 'terrain';
     group.add(mesh); meshes.push(mesh);
   }
@@ -45,7 +45,7 @@ export function blobShadow(size = 1, opacity = 0.42) {
     const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32); grd.addColorStop(0, 'rgba(0,0,0,1)'); grd.addColorStop(0.55, 'rgba(0,0,0,0.55)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
     g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
     blobTex = new THREE.CanvasTexture(c);
-    blobGeo = new THREE.PlaneGeometry(1, 1); blobGeo.rotateX(-Math.PI / 2);
+    blobGeo = new THREE.PlaneGeometry(1, 1); blobGeo.rotateX(-Math.PI / 2); blobGeo.userData.shared = true;
   }
   const m = new THREE.Mesh(blobGeo, new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, opacity, depthWrite: false }));
   m.scale.setScalar(size); m.position.y = 0.02; m.renderOrder = 1;
@@ -232,7 +232,7 @@ export class Foliage {
     this.mesh = mesh; parent.add(mesh);
   }
   update(time) { this.uniforms.time.value = time; }
-  dispose() { this.mesh.parent?.remove(this.mesh); this.mesh.dispose(); this.mesh.material.dispose(); }
+  dispose() { this.mesh.parent?.remove(this.mesh); this.mesh.dispose(); this.mesh.material.dispose(); this.mesh.material.userData.done = true; }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -272,4 +272,30 @@ export function addRim(material, color = 0xfff1d6, strength = 0.32) {
       totalEmissiveRadiance += rimCol * rimF;`);
   };
   material.customProgramCacheKey = () => 'rim';
+}
+
+// ---------------------------------------------------------------------------------------------
+// GPU memory hygiene. Everything loaded by Assets is marked shared and survives; per-screen geometry,
+// cloned materials, skeleton bone textures and textures marked `owned` are freed when a screen closes.
+export function disposeTree(root) {
+  if (!root) return;
+  root.parent?.remove(root);
+  root.traverse((o) => {
+    if (o.isSkinnedMesh && o.skeleton) o.skeleton.dispose();
+    if (o.isInstancedMesh) o.dispose();
+    if (o.geometry && !o.geometry.userData?.shared) o.geometry.dispose();
+    const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+    for (const m of mats) {
+      if (m.userData?.shared) continue;
+      for (const k of ['map', 'alphaMap', 'emissiveMap']) if (m[k]?.userData?.owned) m[k].dispose();
+      m.dispose();
+    }
+  });
+}
+export function markShared(root) {
+  root.traverse((o) => {
+    if (o.geometry) o.geometry.userData.shared = true;
+    const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+    for (const m of mats) m.userData.shared = true;
+  });
 }

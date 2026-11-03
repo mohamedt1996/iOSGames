@@ -19,6 +19,8 @@ import { PLANS } from './ai/tactics.js';
 import { newBrain, skillOf } from './ai/rival.js';
 import { icon, UNIT_ICON } from './ui/icons.js';
 import { Atmosphere } from './render/look.js';
+import { store, watch } from './core/store.js';
+import { PerfGovernor, warmUp, statsOverlay } from './render/perf.js';
 import { loadSave, saveGame, platformReady, setHaptics, haptic } from './platform.js';
 
 const el = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -63,21 +65,25 @@ class App {
   async init() {
     this.save = await loadSave();
     if (!this.save.brain) this.save.brain = newBrain();
+    this.governor = new PerfGovernor(this.stage);
+    // settings live in the store; every system reacts to changes from one subscription
+    watch((st) => st.settings, (st) => { if (st !== this.save.settings) { this.save.settings = st; this.applySettings(); } this.persist(); });
+    watch((st) => st.tier, (t) => this.stage.setQuality(t));
     this.applySettings();
+    statsOverlay();
     const bar = document.querySelector('#boot i');
     await Assets.init((f) => { if (bar) bar.style.width = `${f * 100}%`; });
     await platformReady();
     document.getElementById('boot')?.classList.add('gone');
-    this.perf = { acc: 0, n: 0, checked: false };
     this.go('title');
     const unlock = () => { this.audio.start(); };
     window.addEventListener('pointerdown', unlock);
-    document.addEventListener('visibilitychange', () => { if (document.hidden) { this.audio.ctx?.suspend(); this.screen?.setPaused?.(true); } else this.audio.ctx?.resume(); });
+    document.addEventListener('visibilitychange', () => { store.setState({ paused: document.hidden }); if (document.hidden) { this.audio.ctx?.suspend(); this.screen?.setPaused?.(true); } else this.audio.ctx?.resume(); });
     const loop = (now) => {
-      const dt = Math.min(0.05, (now - this.last) / 1000); this.last = now; this.time += dt;
+      const raw = now - this.last; this.governor.tick(raw);
+      const dt = Math.min(0.05, raw / 1000); this.last = now; this.time += dt;
       this.screen?.step?.(dt, this.time);
       this.stage.render(dt, this.time);
-      this.autoQuality(dt);
       requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
@@ -86,20 +92,7 @@ class App {
   applySettings() {
     const s = this.save.settings;
     this.audio.setEnabled(s.sound); this.audio.setMusic(s.music); setHaptics(s.haptics);
-    this.stage.setQuality(s.graphics === 'auto' ? s.autoTier : s.graphics);
-  }
-  autoQuality(dt) {
-    const s = this.save.settings; if (s.graphics !== 'auto' || this.perf.checked) return;
-    if (!(this.screen instanceof BattleScreen)) return;
-    this.perf.acc += dt; this.perf.n++;
-    if (this.perf.n >= 180) {
-      const avg = this.perf.acc / this.perf.n;
-      this.perf = { acc: 0, n: 0, checked: avg < 0.024 };
-      if (avg >= 0.024) {
-        const next = s.autoTier === 'high' ? 'balanced' : s.autoTier === 'balanced' ? 'battery' : null;
-        if (next) { s.autoTier = next; this.stage.setQuality(next); this.persist(); } else this.perf.checked = true;
-      }
-    }
+    store.setState({ settings: s, tier: s.graphics === 'auto' ? s.autoTier : s.graphics });
   }
   persist() { saveGame(this.save); }
 
@@ -111,6 +104,8 @@ class App {
 
   go(name) {
     this.clear();
+    store.getState().setScreen(name); this.governor.reset();
+    requestAnimationFrame(() => warmUp(this.stage));
     if (name === 'title') { this.screen = new TitleScene(this); this.titleMenu(); }
     if (name === 'campaign') {
       if (!this.save.campaign) this.save.campaign = newCampaign();
@@ -163,10 +158,9 @@ class App {
     if (m === 'sk-rem') { this.sk.army.splice(+b.dataset.i, 1); return this.skirmishMenu(); }
     if (m === 'sk-go') return this.playSkirmish();
     if (m === 'set') {
-      const s = this.save.settings, k = b.dataset.k;
-      if (k === 'graphics') { const o = ['auto', 'high', 'balanced', 'battery']; s.graphics = o[(o.indexOf(s.graphics) + 1) % o.length]; }
-      else s[k] = !s[k];
-      this.applySettings(); this.persist(); return this.settingsMenu();
+      const s = store.getState().settings, k = b.dataset.k, o = ['auto', 'high', 'balanced', 'battery'];
+      store.getState().setSetting(k, k === 'graphics' ? o[(o.indexOf(s.graphics) + 1) % o.length] : !s[k]);
+      return this.settingsMenu();
     }
     if (m === 'burn') { b.dataset.m = 'burn2'; b.textContent = 'Tap again: he forgets everything'; return; }
     if (m === 'burn2') { this.save.brain = newBrain(); this.persist(); haptic('heavy'); return this.showLedger(); }
@@ -234,6 +228,7 @@ class App {
       <div class="sheet-head"><button class="rb" data-m="back">${icon('back')}</button><h2>Settings</h2></div>
       <div class="settings">
         ${row('sound', 'Sound', s.sound ? 'On' : 'Off')}${row('music', 'War drums', s.music ? 'On' : 'Off')}${row('haptics', 'Haptics', s.haptics ? 'On' : 'Off')}
+        ${row('stats', 'Performance overlay', s.stats ? 'On' : 'Off')}
         ${row('graphics', 'Graphics', s.graphics === 'auto' ? `Auto (${s.autoTier})` : s.graphics[0].toUpperCase() + s.graphics.slice(1))}
         <p class="muted">Models: KayKit Medieval Hexagon, Adventurers and Skeletons packs by Kay Lousberg, CC0. Fonts: Cinzel, Alegreya Sans (OFL).</p>
       </div>`);
@@ -268,7 +263,9 @@ class App {
 
   startBattle(opts) {
     this.clear();
+    store.getState().setScreen('BattleScreen'); this.governor.reset();
     this.screen = new BattleScreen(this, opts);
+    warmUp(this.stage);
   }
 }
 

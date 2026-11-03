@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
-import { addRim } from './look.js';
+import { addRim, markShared } from './look.js';
 
 // Loads the CC0 KayKit models (by Kay Lousberg) and hands out clones.
 const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
@@ -25,6 +25,7 @@ export const Assets = {
       else if (f === 'weapons.glb') this.weapons = indexKit(g.scene);
       else this.chars[f.replace('.glb', '')] = g;
     }
+    for (const [, g] of res) markShared(g.scene);
     for (const m of Object.values(this.kit)) m.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   },
   // a static model from the hex kit (shared geometry/materials)
@@ -38,7 +39,7 @@ export const Assets = {
   character(model) {
     const g = this.chars[model];
     const root = SkeletonUtils.clone(g.scene);
-    root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false; if (o.material) { o.material = o.material.clone(); addRim(o.material); } } });
+    root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false; if (o.material) { o.material = o.material.clone(); o.material.userData = { owned: true }; addRim(o.material); } } });
     const mixer = new THREE.AnimationMixer(root);
     const actions = {};
     for (const clip of g.animations) actions[clip.name] = mixer.clipAction(clip);
@@ -54,6 +55,18 @@ export const Assets = {
       const g = toFloat(o.geometry.clone());
       const m = new THREE.Matrix4().multiplyMatrices(matrix, o.matrixWorld);
       g.applyMatrix4(m);
+      out.push({ geometry: g, material: o.material });
+    });
+    return out;
+  },
+  // flatten an assembled group of props into bakeable parts (transforms relative to the group)
+  bakeObject(root) {
+    const out = [], inv = new THREE.Matrix4();
+    root.updateMatrixWorld(true); inv.copy(root.matrixWorld).invert();
+    root.traverse((o) => {
+      if (!o.isMesh) return;
+      const g = toFloat(o.geometry.clone());
+      g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld));
       out.push({ geometry: g, material: o.material });
     });
     return out;

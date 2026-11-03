@@ -13,6 +13,8 @@ import { SCENARIOS, BOOKS } from './data/scenarios.js';
 import { newMemory, notes, trustOf, pReal, STYLES } from './game/ai.js';
 import { CARDS } from './game/cards.js';
 import { icon } from './ui/icons.js';
+import { store, watch } from './core/store.js';
+import { PerfGovernor, warmUp, statsOverlay } from './render/perf.js';
 import { loadSave, saveGame, platformReady, setHaptics, haptic } from './platform.js';
 
 const el = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
@@ -22,7 +24,7 @@ class TitleScene {
   constructor(app) {
     this.app = app;
     this.realm = new Realm({ seed: 7, radius: 4, houses: [{ id: 'blue' }, { id: 'red' }, { id: 'green' }, { id: 'yellow' }] });
-    for (const p of this.realm.provinces) if (!p.owner && Math.random() < 0.55) { const h = this.realm.houses[Math.floor(Math.random() * 4)]; p.owner = h.id; p.troops = 2 + Math.floor(Math.random() * 8); }
+    for (const p of this.realm.provinces) if (!p.owner && Math.random() < 0.55) { const h = this.realm.houses[Math.floor(Math.random() * 4)]; p.owner = h.id; p.troops = 2 + Math.floor(Math.random() * 5); }
     app.stage.setMood(false);
     this.view = new RealmView(app.stage.scene, this.realm); this.view.setScale(app.stage.renderer.domElement.height);
     app.stage.addClouds(30, 10);
@@ -45,16 +47,22 @@ class App {
   async init() {
     this.save = await loadSave();
     if (!this.save.memory) this.save.memory = newMemory();
+    this.governor = new PerfGovernor(this.stage);
+    // settings live in the store; every system reacts to changes from one subscription
+    watch((st) => st.settings, (st) => { if (st !== this.save.settings) { this.save.settings = st; this.applySettings(); } this.persist(); });
+    watch((st) => st.tier, (t) => this.stage.setQuality(t));
     this.applySettings();
+    statsOverlay();
     const bar = document.querySelector('#boot i');
     await Assets.init((f) => { if (bar) bar.style.width = `${f * 100}%`; });
     await platformReady();
     document.getElementById('boot')?.classList.add('gone');
     this.go('title');
     window.addEventListener('pointerdown', () => this.audio.start());
-    document.addEventListener('visibilitychange', () => { if (document.hidden) this.audio.ctx?.suspend(); else this.audio.ctx?.resume(); });
+    document.addEventListener('visibilitychange', () => { store.setState({ paused: document.hidden }); if (document.hidden) this.audio.ctx?.suspend(); else this.audio.ctx?.resume(); });
     const loop = (now) => {
-      const dt = Math.min(0.05, (now - this.last) / 1000); this.last = now; this.time += dt;
+      const raw = now - this.last; this.governor.tick(raw);
+      const dt = Math.min(0.05, raw / 1000); this.last = now; this.time += dt;
       this.screen?.step?.(dt, this.time);
       this.stage.render(dt, this.time);
       requestAnimationFrame(loop);
@@ -64,13 +72,15 @@ class App {
   applySettings() {
     const s = this.save.settings;
     this.audio.setEnabled(s.sound); this.audio.setMusic(s.music); setHaptics(s.haptics);
-    this.stage.setQuality(s.graphics === 'auto' ? s.autoTier : s.graphics);
+    store.setState({ settings: s, tier: s.graphics === 'auto' ? s.autoTier : s.graphics });
   }
   persist() { saveGame(this.save); }
   clear() { this.screen?.dispose?.(); this.screen = null; this.ui.innerHTML = ''; this.stage.clouds.clear(); }
 
   go(name) {
     this.clear();
+    store.getState().setScreen(name); this.governor.reset();
+    requestAnimationFrame(() => warmUp(this.stage));
     if (name === 'title') { this.screen = new TitleScene(this); this.titleMenu(); }
   }
 
@@ -108,9 +118,9 @@ class App {
     if (m === 'council') return this.councilMenu();
     if (m === 'settings') return this.settingsMenu();
     if (m === 'set') {
-      const s = this.save.settings, k = b.dataset.k;
-      if (k === 'graphics') { const o = ['auto', 'high', 'balanced', 'battery']; s.graphics = o[(o.indexOf(s.graphics) + 1) % o.length]; } else s[k] = !s[k];
-      this.applySettings(); this.persist(); return this.settingsMenu();
+      const s = store.getState().settings, k = b.dataset.k, o = ['auto', 'high', 'balanced', 'battery'];
+      store.getState().setSetting(k, k === 'graphics' ? o[(o.indexOf(s.graphics) + 1) % o.length] : !s[k]);
+      return this.settingsMenu();
     }
     if (m === 'forget') { b.dataset.m = 'forget2'; b.textContent = 'Tap again: the houses forget you'; return; }
     if (m === 'forget2') { this.save.memory = newMemory(); this.persist(); haptic('heavy'); return this.councilMenu(); }
@@ -196,13 +206,15 @@ class App {
     const s = this.save.settings;
     const row = (k, label, v) => `<button class="setting" data-m="set" data-k="${k}"><span>${label}</span><b>${v}</b></button>`;
     this.panel(`<div class="sheet-head"><button class="rb" data-m="back">${icon('back')}</button><h2>Settings</h2></div>
-      <div class="settings">${row('sound', 'Sound', s.sound ? 'On' : 'Off')}${row('music', 'Lute', s.music ? 'On' : 'Off')}${row('haptics', 'Haptics', s.haptics ? 'On' : 'Off')}${row('graphics', 'Graphics', s.graphics === 'auto' ? `Auto (${s.autoTier})` : s.graphics)}
+      <div class="settings">${row('sound', 'Sound', s.sound ? 'On' : 'Off')}${row('music', 'Lute', s.music ? 'On' : 'Off')}${row('haptics', 'Haptics', s.haptics ? 'On' : 'Off')}${row('stats', 'Performance overlay', s.stats ? 'On' : 'Off')}${row('graphics', 'Graphics', s.graphics === 'auto' ? `Auto (${s.autoTier})` : s.graphics)}
       <p class="muted">Models: KayKit Medieval Hexagon and Adventurers packs by Kay Lousberg, CC0. Fonts: IM Fell English, EB Garamond (OFL).</p></div>`, 'list');
   }
 
   startGame(cfg, opts) {
     this.clear();
+    store.getState().setScreen('GameScreen'); this.governor.reset();
     this.screen = new GameScreen(this, cfg, opts);
+    warmUp(this.stage);
   }
 }
 

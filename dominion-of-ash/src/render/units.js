@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Assets } from './assets.js';
 import { UNITS, FACTIONS } from '../data/units.js';
 import { ringTexture } from './textures.js';
-import { blobShadow } from './look.js';
+import { blobShadow, disposeTree } from './look.js';
 
 const RING = ringTexture();
 const FADE = 0.18;
@@ -125,5 +125,5 @@ export class UnitViews {
     }
     return best;
   }
-  dispose() { this.scene.remove(this.group); this.views.clear(); }
+  dispose() { for (const v of this.views.values()) v.char.mixer.uncacheRoot(v.char.root); disposeTree(this.group); this.ringGeo.dispose(); this.barGeo.dispose(); this.views.clear(); }
 }

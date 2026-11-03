@@ -9,7 +9,7 @@ const KEY = 'crown-of-thorns-v1';
 
 const defaults = () => ({
   memory: null, scenarios: {}, realm: null, seenIntro: false,
-  settings: { sound: true, music: true, haptics: true, graphics: 'auto', autoTier: 'high' },
+  settings: { sound: true, music: true, haptics: true, graphics: 'auto', autoTier: 'high', stats: false },
 });
 
 export async function loadSave() {
